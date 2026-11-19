@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#12141a">
 <title>LiteCast — Lightweight Screen &amp; Camera Recorder</title>
 <style>
 :root{--bg:#0e1015;--panel:#161920;--panel2:#1d212b;--line:#2a2f3b;--text:#e9ebf1;--mut:#97a0b1;--acc:#4f8cff;--rec:#ff4d4f;--ok:#2fbf71;--warn:#f5a524}
@@ -95,6 +99,39 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 aside.locked .lockable{opacity:.5;pointer-events:none}
 a{color:#8fb4ff}
 @media(max-width:900px){.app{grid-template-columns:1fr;height:auto}aside{border-right:0}}
+
+.btn.live{background:#0f7b4f;border-color:#0f7b4f;color:#fff;font-weight:600}
+.btn.live.on{background:#b42318;border-color:#b42318;color:#fff}
+.livepanel{max-width:1100px;margin:12px auto 0;display:none;grid-template-columns:1.2fr 1fr;gap:12px}
+.livepanel.show{display:grid}
+.lp{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.lp h4{margin:0 0 8px;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);display:flex;align-items:center;gap:8px}
+.lp h4 .dot{width:9px;height:9px;border-radius:50%;background:var(--rec);animation:blink 1s infinite}
+.linkbox{display:flex;gap:6px}
+.linkbox input{font-size:12.5px}
+.students{max-height:150px;overflow:auto;margin-top:8px;display:flex;flex-wrap:wrap;gap:6px}
+.students span{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:3px 10px;font-size:12.5px}
+.students span.hand{border-color:var(--warn);color:#f8c56a}
+.chatlog{height:170px;overflow:auto;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px;font-size:13px}
+.chatlog div{margin-bottom:5px;word-wrap:break-word}
+.chatlog b{color:#9fc0ff;font-weight:600}
+.chatlog .sys{color:var(--mut);font-style:italic;font-size:12px}
+.chatform{display:flex;gap:6px;margin-top:6px}
+details.adv summary{cursor:pointer;color:var(--mut);font-size:12.5px;margin-top:10px}
+/* ---------- student viewer ---------- */
+#viewer{display:none;height:100%;flex-direction:column}
+body.viewer #viewer{display:flex}
+body.viewer > header, body.viewer .app{display:none}
+.vmain{flex:1;display:grid;grid-template-columns:1fr 320px;gap:12px;padding:12px;min-height:0}
+.vstage{position:relative;background:#000;border-radius:12px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden}
+.vstage video{width:100%;height:100%;object-fit:contain;background:#000}
+.vstage .ov{border-radius:12px}
+.vfs{position:absolute;right:10px;bottom:10px;opacity:.85}
+.vside{display:flex;flex-direction:column;gap:8px;min-height:0}
+.vside .chatlog{flex:1;height:auto}
+.vstatus{font-size:12.5px;color:var(--mut)}
+.vstatus.ok{color:#7fe0aa}
+@media(max-width:800px){.vmain{grid-template-columns:1fr;grid-template-rows:auto 1fr}.vstage{aspect-ratio:16/9}.livepanel.show{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -102,7 +139,7 @@ a{color:#8fb4ff}
   <div class="logo"></div>
   <div><h1>LiteCast Recorder</h1><div class="sub">Small-file screen + camera recordings for online teaching</div></div>
   <div class="sp"></div>
-  <div class="kbd"><b>Alt</b>+<b>R</b> start/stop &nbsp; <b>Alt</b>+<b>P</b> pause &nbsp; <b>Alt</b>+<b>C</b> camera &nbsp; <b>Alt</b>+<b>M</b> mic</div>
+  <div class="kbd"><b>Alt</b>+<b>R</b> start/stop &nbsp; <b>Alt</b>+<b>P</b> pause &nbsp; <b>Alt</b>+<b>C</b> camera &nbsp; <b>Alt</b>+<b>M</b> mic &nbsp; <b>Alt</b>+<b>L</b> live</div>
 </header>
 
 <div class="app">
@@ -174,6 +211,28 @@ a{color:#8fb4ff}
     <div class="hint">Tip: choose your <b>Google Drive</b> folder (Google Drive for desktop, e.g. <i>G:\My Drive\Lectures</i>) and every recording uploads itself automatically.</div>
     <label class="chk lockable"><input type="checkbox" id="countdown"> 3-second countdown before recording</label>
   </div>
+  <div class="card">
+    <h3><span class="n">6</span>Live class</h3>
+    <div class="hint" style="margin-top:0">Students open your class link in any browser (phone or PC) — no app, no account. Your laptop sends the video to each student, so it suits up to about <b>8–10 students</b> on a normal home connection.</div>
+    <div class="row"><label>Class link ID</label><input type="text" id="room" class="grow lockable"><button class="btn sm lockable" id="newRoom" title="Make a new link">↻</button></div>
+    <div class="hint">Keep the same ID and students can reuse the same link every lecture.</div>
+    <div class="row"><label>Quality / student</label><select id="liveKbps" class="grow">
+      <option value="250">Low · 250 kbps (weak internet)</option><option value="400">Normal · 400 kbps</option>
+      <option value="600">Good · 600 kbps</option><option value="900">High · 900 kbps</option></select></div>
+    <div class="hint" id="upEst"></div>
+    <details class="adv"><summary>Connection help for mobile-data students (relay server)</summary>
+      <div class="hint">A free shared relay (PeerJS) is already used automatically. If some students on mobile data still cannot connect, add your own free relay: create a free account at <a href="https://www.metered.ca/tools/openrelay/" target="_blank">metered.ca Open Relay</a> (20 GB/month free) and paste the <i>TURN credentials API URL</i> from your dashboard here.</div>
+      <div class="row"><label>Relay</label><select id="turnMode" class="grow"><option value="none">None (direct only)</option><option value="url">Metered / credentials URL</option><option value="custom">Custom TURN server</option></select></div>
+      <div id="turnUrlRow" class="row"><label>API URL</label><input type="text" id="turnUrl" class="grow" placeholder="https://yourapp.metered.live/api/v1/turn/credentials?apiKey=…"></div>
+      <div id="turnCustom">
+        <div class="row"><label>TURN URLs</label><input type="text" id="turnUrls" class="grow" placeholder="turn:host:443?transport=tcp"></div>
+        <div class="row"><label>Username</label><input type="text" id="turnUser" class="grow"></div>
+        <div class="row"><label>Password</label><input type="text" id="turnPass" class="grow"></div>
+      </div>
+      <div class="row"><label>Public address</label><input type="text" id="publicUrl" class="grow" placeholder="https://msakkary-blip.github.io/litecast/"></div>
+      <div class="hint">Used to build the student link when you open LiteCast from a file on your PC.</div>
+    </details>
+  </div>
 </aside>
 
 <main>
@@ -197,6 +256,22 @@ a{color:#8fb4ff}
     <button class="btn sm" id="camToggle" title="Show / hide your face (Alt+C)">🎥 Camera on</button>
     <button class="btn sm" id="micToggle" title="Mute / unmute (Alt+M)">🎙 Mic on</button>
     <button class="btn sm" id="pipBtn" title="Always-on-top camera bubble / mini controls">⧉ Floating window</button>
+    <button class="btn live" id="liveBtn" title="Teach live — students join with a link (Alt+L)">📡 Go live</button>
+  </div>
+
+  <div class="livepanel" id="livePanel">
+    <div class="lp">
+      <h4><span class="dot"></span>Live now · <span id="liveCount">0 students</span> · <span id="liveTime">00:00</span></h4>
+      <div class="linkbox"><input type="text" id="liveLink" readonly><button class="btn sm pri" id="copyLink">Copy</button></div>
+      <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="liveWa">💬 Send on WhatsApp</button><button class="btn sm" id="liveMail">✉ Email link</button><button class="btn sm" id="liveOpen">👁 Preview as student</button></div>
+      <div class="students" id="students"></div>
+      <div class="hint" id="liveWarn"></div>
+    </div>
+    <div class="lp">
+      <h4>Class chat</h4>
+      <div class="chatlog" id="tChat"></div>
+      <form class="chatform" id="tForm"><input type="text" id="tMsg" placeholder="Message to all students…" autocomplete="off"><button class="btn sm pri">Send</button></form>
+    </div>
   </div>
 
   <div class="lib">
@@ -222,6 +297,28 @@ a{color:#8fb4ff}
   <div class="hint" id="mHint"></div>
 </div></div>
 
+<div id="viewer">
+  <header><div class="logo"></div><div><h1 id="vTitle">LiteCast Live class</h1><div class="vstatus" id="vStatus">Not connected</div></div><div class="sp"></div><span id="vHandLbl" class="kbd"></span></header>
+  <div class="vmain">
+    <div class="vstage">
+      <video id="vVid" playsinline autoplay></video>
+      <button class="btn sm vfs" id="vFs">⛶ Full screen</button>
+      <div class="ov show" id="vJoin">
+        <div style="font-size:18px;font-weight:600">Join the live class</div>
+        <input type="text" id="vName" placeholder="Your name" maxlength="40" style="max-width:280px;text-align:center">
+        <button class="btn pri" id="vJoinBtn">Join class</button>
+        <div class="hint">Works in Chrome, Edge, Safari and Firefox — on phone or computer.</div>
+      </div>
+      <div class="ov" id="vMsgOv"><div id="vMsgTxt" style="font-size:16px"></div><button class="btn pri" id="vPlay" style="display:none">▶ Tap to start video &amp; sound</button></div>
+    </div>
+    <div class="vside">
+      <div class="chatlog" id="vChat"></div>
+      <form class="chatform" id="vForm"><input type="text" id="vMsg" placeholder="Ask a question…" autocomplete="off"><button class="btn sm pri">Send</button></form>
+      <button class="btn" id="vHand">✋ Raise hand</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="hid"></div>
 
@@ -239,8 +336,10 @@ const PRESETS={
 };
 const S=Object.assign({mode:'screencam',camStyle:'overlay',shape:'circle',camSize:0.26,camX:0.86,camY:0.78,mirror:true,
   camId:'',micId:'',micOn:true,micGain:1,noise:true,sysAudio:true,preset:'small',w:1280,h:720,fps:12,vk:400,ak:48,
-  format:'mp4',countdown:true,title:'Lecture',camVisible:true},(()=>{try{return JSON.parse(localStorage.getItem('litecast')||'{}')}catch{return{}}})());
+  format:'mp4',countdown:true,title:'Lecture',camVisible:true,liveKbps:400,room:'',turnMode:'none',turnUrl:'',turnUrls:'',turnUser:'',turnPass:'',publicUrl:''},(()=>{try{return JSON.parse(localStorage.getItem('litecast')||'{}')}catch{return{}}})());
 S.camVisible=true;
+const newRoomId=()=>'litecast-'+Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');
+if(!S.room)S.room=newRoomId();
 const save=()=>{try{localStorage.setItem('litecast',JSON.stringify(S))}catch{}};
 
 /* ---------------- helpers ---------------- */
@@ -286,7 +385,9 @@ class FrameSrc{
 
 /* ---------------- state ---------------- */
 let camStream=null,micStream=null,displayStream=null,camSrc=null,scrSrc=null,audioCtx=null,analyser=null,meterBuf=null,micMuted=false;
-const rec={active:false,paused:false,mr:null,chunks:[],bytes:0,t0:0,acc:0,direct:false,vtrack:null,mime:'',micGain:null,extra:[],W:0,H:0};
+const rec={active:false,paused:false,mr:null,chunks:[],bytes:0,t0:0,acc:0,mime:''};
+const cap={active:false,direct:false,vtrack:null,stream:null,micGain:null,extra:[],W:0,H:0};
+const live={active:false,peer:null,viewers:new Map(),chat:[],t0:0};
 const elapsed=()=>rec.active?rec.acc+(rec.paused?0:performance.now()-rec.t0):0;
 let pipWin=null;
 
@@ -331,22 +432,22 @@ function draw(){
     return;
   }
   if(!(scrSrc&&drawContain(scrSrc,W,H))) placeholder(W,H,'Your screen appears here after you press Start');
-  const showCam=S.mode==='screencam'&&camSrc&&S.camVisible&&!(rec.active&&rec.direct);
-  if(showCam&&!(S.camStyle==='bubble'&&rec.active)){
+  const showCam=S.mode==='screencam'&&camSrc&&S.camVisible&&!(cap.active&&cap.direct);
+  if(showCam&&!(S.camStyle==='bubble'&&cap.active)){
     const r=camRect(W,H);
     ctx.save();shapePath(r);ctx.clip();
     if(!drawCover(camSrc,r.x,r.y,r.w,r.h,S.mirror)){ctx.fillStyle='#222';ctx.fill()}
     ctx.restore();
     shapePath(r);ctx.lineWidth=Math.max(2,H/240);ctx.strokeStyle='rgba(255,255,255,.95)';ctx.stroke();
-    if(S.camStyle==='bubble'&&!rec.active){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(r.x,r.y+r.h-22,r.w,22);ctx.fillStyle='#fff';ctx.font='12px Segoe UI';ctx.textAlign='center';ctx.fillText('floating bubble',r.x+r.w/2,r.y+r.h-7)}
+    if(S.camStyle==='bubble'&&!cap.active){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(r.x,r.y+r.h-22,r.w,22);ctx.fillStyle='#fff';ctx.font='12px Segoe UI';ctx.textAlign='center';ctx.fillText('floating bubble',r.x+r.w/2,r.y+r.h-7)}
   }
 }
 
 /* ---------------- tick ---------------- */
 let lastUi=0;
 function onTick(){
-  if(!document.hidden||rec.active) draw();
-  if(rec.active&&!rec.direct&&!rec.paused&&rec.vtrack&&rec.vtrack.requestFrame) rec.vtrack.requestFrame();
+  if(!document.hidden||cap.active) draw();
+  if(cap.active&&!cap.direct&&cap.vtrack&&cap.vtrack.requestFrame&&!(rec.active&&rec.paused&&!live.active)) cap.vtrack.requestFrame();
   const n=performance.now();
   if(n-lastUi>200){lastUi=n;meter();updateUi()}
 }
@@ -395,19 +496,18 @@ async function syncDevices(){
 }
 async function refreshEnableOverlay(){
   const missing=(needCam()&&!camStream)||(S.micOn&&!micStream);
-  $('#ovEnable').classList.toggle('show',missing&&!rec.active);
+  $('#ovEnable').classList.toggle('show',missing&&!cap.active);
 }
 
 /* ---------------- canvas size ---------------- */
 function idleSize(){
-  if(rec.active) return;
+  if(cap.active) return;
   if(stage.width!==S.w||stage.height!==S.h){stage.width=S.w;stage.height=S.h}
 }
 
-/* ---------------- recording ---------------- */
-async function startRec(){
-  if(rec.active) return;
-  if(!window.MediaRecorder) return toast('This browser cannot record. Please use Google Chrome or Microsoft Edge.');
+/* ---------------- capture (shared by recording + live) ---------------- */
+async function startCapture(){
+  if(cap.active) return true;
   const screenNeeded=S.mode!=='cam';
   const bubble=S.mode==='screencam'&&S.camStyle==='bubble';
   if(needCam()&&!camStream) await startCamera();
@@ -421,60 +521,87 @@ async function startRec(){
         audio:S.sysAudio?{echoCancellation:false,noiseSuppression:false,autoGainControl:false}:false,
         systemAudio:S.sysAudio?'include':'exclude',selfBrowserSurface:'exclude',surfaceSwitching:'include',monitorTypeSurfaces:'include'});
     }catch(e){
-      if(e.name==='NotAllowedError'&&/activation|gesture/i.test(e.message)) toast('Please click <b>Start recording</b> again.');
+      if(e.name==='NotAllowedError'&&/activation|gesture/i.test(e.message)) toast('Please click the button again.');
       else toast('Screen sharing was cancelled.');
-      return;
+      return false;
     }
     const vt=displayStream.getVideoTracks()[0];
     try{vt.contentHint='detail'}catch{}
-    vt.addEventListener('ended',()=>{if(rec.active)stopRec(false)});
+    vt.addEventListener('ended',onCaptureEnded);
     scrSrc=new FrameSrc(vt);
     if(S.sysAudio&&!displayStream.getAudioTracks().length) toast('No computer sound captured — tick “Also share system audio” next time if you need it.',5000);
   }
-  // audio mix
   ensureAudio();
   const dest=audioCtx.createMediaStreamDestination();dest.channelCount=1;
-  let hasAudio=false;rec.extra=[];
+  let hasAudio=false;cap.extra=[];cap.micGain=null;
   if(S.micOn&&micStream){
-    const src=audioCtx.createMediaStreamSource(micStream),g=audioCtx.createGain();g.gain.value=micMuted?0:S.micGain;src.connect(g).connect(dest);rec.micGain=g;rec.extra.push(src,g);hasAudio=true;
-  } else rec.micGain=null;
-  if(displayStream&&displayStream.getAudioTracks().length){
-    const src=audioCtx.createMediaStreamSource(new MediaStream(displayStream.getAudioTracks())),g=audioCtx.createGain();g.gain.value=0.8;src.connect(g).connect(dest);rec.extra.push(src,g);hasAudio=true;
+    const src=audioCtx.createMediaStreamSource(micStream),g=audioCtx.createGain();g.gain.value=micMuted?0:S.micGain;src.connect(g).connect(dest);cap.micGain=g;cap.extra.push(src,g);hasAudio=true;
   }
-  // video track
-  rec.direct=bubble;
+  if(displayStream&&displayStream.getAudioTracks().length){
+    const src=audioCtx.createMediaStreamSource(new MediaStream(displayStream.getAudioTracks())),g=audioCtx.createGain();g.gain.value=0.8;src.connect(g).connect(dest);cap.extra.push(src,g);hasAudio=true;
+  }
+  cap.direct=bubble;
   let vtrack;
-  if(rec.direct){
+  if(cap.direct){
     vtrack=displayStream.getVideoTracks()[0];
-    await waitDims(scrSrc);rec.W=scrSrc.w;rec.H=scrSrc.h;
-    sizeStage(scrSrc.w,scrSrc.h);
+    await waitDims(scrSrc);cap.W=scrSrc.w;cap.H=scrSrc.h;sizeStage(scrSrc.w,scrSrc.h);
   }else{
     if(screenNeeded){await waitDims(scrSrc);sizeStage(scrSrc.w,scrSrc.h)} else sizeStage(S.w,S.h);
-    rec.W=stage.width;rec.H=stage.height;
+    cap.W=stage.width;cap.H=stage.height;
     vtrack=stage.captureStream(0).getVideoTracks()[0];
+    try{vtrack.contentHint='detail'}catch{}
   }
-  rec.vtrack=vtrack;
-  if(S.countdown) await countdown();
-  if(screenNeeded&&(!displayStream||!displayStream.active)){cleanupStreams();return}
-  const tracks=[vtrack];if(hasAudio)tracks.push(dest.stream.getAudioTracks()[0]);
-  rec.mime=pickMime();
-  const opts={videoBitsPerSecond:S.vk*1000,audioBitsPerSecond:S.ak*1000,videoKeyFrameIntervalDuration:10000};
-  if(rec.mime)opts.mimeType=rec.mime;
-  try{rec.mr=new MediaRecorder(new MediaStream(tracks),opts)}
-  catch(e){delete opts.mimeType;rec.mr=new MediaRecorder(new MediaStream(tracks),opts);rec.mime=rec.mr.mimeType}
-  rec.chunks=[];rec.bytes=0;
-  rec.mr.ondataavailable=e=>{if(e.data&&e.data.size){rec.chunks.push(e.data);rec.bytes+=e.data.size}};
-  rec.mr.onstop=finalize;
-  rec.mr.start(1000);
-  rec.active=true;rec.paused=false;rec.acc=0;rec.t0=performance.now();
-  setTick(rec.direct?8:S.fps);
+  cap.vtrack=vtrack;
+  cap.stream=new MediaStream(hasAudio?[vtrack,dest.stream.getAudioTracks()[0]]:[vtrack]);
+  cap.active=true;
+  setTick(cap.direct?8:S.fps);
   $('#side').classList.add('locked');refreshEnableOverlay();updateUi();
+  return true;
+}
+function stopCapture(){
+  if(!cap.active) return;
+  cap.active=false;
+  if(scrSrc){scrSrc.stop();scrSrc=null}
+  if(displayStream){displayStream.getTracks().forEach(t=>t.stop());displayStream=null}
+  cap.extra.forEach(n=>{try{n.disconnect()}catch{}});cap.extra=[];cap.micGain=null;
+  if(cap.vtrack&&!cap.direct)cap.vtrack.stop();
+  if(cap.stream)cap.stream.getAudioTracks().forEach(t=>t.stop());
+  cap.vtrack=null;cap.stream=null;
+  setTick(15);$('#side').classList.remove('locked');idleSize();refreshEnableOverlay();updateUi();
+}
+function onCaptureEnded(){
+  if(rec.active)stopRec(false);
+  if(live.active)endLive();
+  if(!rec.active&&!live.active)stopCapture();
 }
 function waitDims(src){return new Promise(async r=>{for(let i=0;i<60;i++){if(src&&src.w)return r();await sleep(50)}r()})}
 function sizeStage(sw,sh){
   if(!sw||!sh){sw=S.w;sh=S.h}
   const sc=Math.min(S.w/sw,S.h/sh,1);
   stage.width=even(sw*sc);stage.height=even(sh*sc);
+}
+
+/* ---------------- recording ---------------- */
+async function startRec(){
+  if(rec.active||rec.starting) return;
+  if(!window.MediaRecorder) return toast('This browser cannot record. Please use Google Chrome or Microsoft Edge.');
+  rec.starting=true;
+  try{
+    if(!(await startCapture())) return;
+    if(S.countdown) await countdown();
+    if(!cap.active) return;
+    rec.mime=pickMime();
+    const opts={videoBitsPerSecond:S.vk*1000,audioBitsPerSecond:S.ak*1000,videoKeyFrameIntervalDuration:10000};
+    if(rec.mime)opts.mimeType=rec.mime;
+    const st=new MediaStream(cap.stream.getTracks());
+    try{rec.mr=new MediaRecorder(st,opts)}
+    catch(e){delete opts.mimeType;rec.mr=new MediaRecorder(st,opts);rec.mime=rec.mr.mimeType}
+    rec.chunks=[];rec.bytes=0;rec.W=cap.W;rec.H=cap.H;rec.dur=0;
+    rec.mr.ondataavailable=e=>{if(e.data&&e.data.size){rec.chunks.push(e.data);rec.bytes+=e.data.size}};
+    rec.mr.onstop=finalize;
+    rec.mr.start(1000);
+    rec.active=true;rec.paused=false;rec.acc=0;rec.t0=performance.now();
+  }finally{rec.starting=false;updateUi()}
 }
 async function countdown(){
   const ov=$('#ovCd');ov.classList.add('show');
@@ -493,16 +620,11 @@ async function stopRec(fromGesture=true){
   if(fromGesture&&folderHandle){try{if(await folderHandle.queryPermission({mode:'readwrite'})!=='granted')await folderHandle.requestPermission({mode:'readwrite'})}catch{}}
   if(rec.mr&&rec.mr.state!=='inactive')rec.mr.stop();
 }
-function cleanupStreams(){
-  if(scrSrc){scrSrc.stop();scrSrc=null}
-  if(displayStream){displayStream.getTracks().forEach(t=>t.stop());displayStream=null}
-  rec.extra.forEach(n=>{try{n.disconnect()}catch{}});rec.extra=[];
-}
+
 async function finalize(){
   const dur=rec.dur||elapsed();
-  rec.active=false;rec.paused=false;cleanupStreams();
-  if(rec.vtrack&&!rec.direct)rec.vtrack.stop();
-  setTick(15);$('#side').classList.remove('locked');idleSize();refreshEnableOverlay();
+  rec.active=false;rec.paused=false;
+  if(!live.active)stopCapture();
   const type=(rec.mime||rec.chunks[0]?.type||'video/webm').split(';')[0];
   let blob=new Blob(rec.chunks,{type});rec.chunks=[];
   if(type.includes('webm')){try{blob=await fixWebmDuration(blob,dur)}catch(e){}}
@@ -511,7 +633,7 @@ async function finalize(){
   recs.unshift(item);try{await DB.put('recs',item)}catch(e){toast('Could not store in browser library: '+e.message)}
   renderLib();updateUi();
   if(folderHandle) await saveToFolder(item,true);
-  openResult(item);
+  if(!live.active) openResult(item); else toast(`Recording saved (${fmtSize(item.size)}) — find it under <b>My recordings</b>.`,5000);
 }
 
 /* ---------------- WebM duration fix (MediaRecorder writes no duration → players can't seek) ---------------- */
@@ -667,7 +789,7 @@ function buildPip(){
 }
 
 /* ---------------- toggles ---------------- */
-function toggleMic(){micMuted=!micMuted;if(rec.micGain)rec.micGain.gain.value=micMuted?0:S.micGain;updateUi();toast(micMuted?'Microphone muted':'Microphone on',1500)}
+function toggleMic(){micMuted=!micMuted;if(cap.micGain)cap.micGain.gain.value=micMuted?0:S.micGain;updateUi();toast(micMuted?'Microphone muted':'Microphone on',1500)}
 function toggleCam(){S.camVisible=!S.camVisible;updateUi()}
 
 /* ---------------- UI ---------------- */
@@ -684,7 +806,9 @@ function updateUi(){
   $('#camToggle').textContent=S.camVisible?'🎥 Camera on':'🚫 Camera hidden';$('#camToggle').disabled=!needCam();
   $('#micToggle').textContent=micMuted?'🔇 Mic muted':'🎙 Mic on';$('#micToggle').classList.toggle('on',micMuted);
   $('#pipBtn').classList.toggle('on',!!pipWin);
-  document.title=rec.active?(rec.paused?'⏸ ':'🔴 ')+t+' — LiteCast':'LiteCast — Lightweight Screen & Camera Recorder';
+  if(!live.starting){$('#liveBtn').classList.toggle('on',live.active);$('#liveBtn').textContent=live.active?`⏹ End live (${live.viewers.size})`:'📡 Go live'}
+  if(live.active)$('#liveTime').textContent=fmtDur(performance.now()-live.t0);
+  document.title=live.active&&!rec.active?'📡 Live — LiteCast':rec.active?(rec.paused?'⏸ ':'🔴 ')+t+' — LiteCast':'LiteCast — Lightweight Screen & Camera Recorder';
   if(pipWin){const d=pipWin.document;d.body.classList.toggle('rec',rec.active);d.body.classList.toggle('paused',rec.paused);
     const q=id=>d.getElementById(id);if(q('pt'))q('pt').textContent=t;if(q('prec'))q('prec').textContent=rec.active?'■ Stop':'● Rec';
     if(q('ppause'))q('ppause').textContent=rec.paused?'▶':'⏸';if(q('pmic'))q('pmic').textContent=micMuted?'🔇':'🎙';
@@ -702,11 +826,14 @@ function renderSettings(){
   const rv=S.w+'x'+S.h;if(![...$('#res').options].some(o=>o.value===rv))$('#res').insertAdjacentHTML('beforeend',`<option value="${rv}">${S.w}×${S.h}</option>`);$('#res').value=rv;
   $('#fps').value=String(S.fps);$('#vk').value=S.vk;$('#vkv').textContent=S.vk;$('#ak').value=String(S.ak);
   $('#fmt').value=S.format;
+  $('#room').value=S.room;$('#liveKbps').value=String(S.liveKbps);$('#turnMode').value=S.turnMode;$('#turnUrl').value=S.turnUrl;$('#turnUrls').value=S.turnUrls;$('#turnUser').value=S.turnUser;$('#turnPass').value=S.turnPass;$('#publicUrl').value=S.publicUrl;
+  $('#turnUrlRow').style.display=S.turnMode==='url'?'':'none';$('#turnCustom').style.display=S.turnMode==='custom'?'':'none';
+  $('#upEst').innerHTML=`Your upload needed ≈ ${((S.liveKbps+40)/1000).toFixed(2)} Mbps per student · 8 students ≈ <b>${(8*(S.liveKbps+40)/1000).toFixed(1)} Mbps</b>`;
   const m=mbPerMin();
   $('#est').innerHTML=`Target size ≈ <b>${m.toFixed(1)} MB</b> per minute<br>45-min lecture ≈ <b>${(m*45).toFixed(0)} MB</b> · 10 min ≈ ${(m*10).toFixed(0)} MB<div class="hint" style="margin-top:4px">Slides and still screens usually come out smaller. For text-heavy screens prefer lower fps over lower resolution.</div>`;
   idleSize();save();
 }
-function bindSeg(id,key,after){$$(id+' button').forEach(b=>b.onclick=()=>{if(rec.active&&id!=='#segShape')return;S[key]=b.dataset.v;after&&after();renderSettings()})}
+function bindSeg(id,key,after){$$(id+' button').forEach(b=>b.onclick=()=>{if(cap.active&&id!=='#segShape')return;S[key]=b.dataset.v;after&&after();renderSettings()})}
 bindSeg('#segMode','mode',()=>{syncDevices();if(pipWin)buildPip()});
 bindSeg('#segStyle','camStyle');
 bindSeg('#segShape','shape',()=>pipWin&&buildPip());
@@ -717,10 +844,15 @@ $('#fps').onchange=e=>{S.fps=+e.target.value;custom()};
 $('#vk').oninput=e=>{S.vk=+e.target.value;custom()};
 $('#ak').onchange=e=>{S.ak=+e.target.value;custom()};
 $('#fmt').onchange=e=>{S.format=e.target.value;renderSettings()};
+$('#room').onchange=e=>{const v=e.target.value.trim().replace(/[^A-Za-z0-9_-]/g,'-');S.room=v.length>=4?v:newRoomId();renderSettings()};
+$('#newRoom').onclick=()=>{S.room=newRoomId();renderSettings();toast('New class link created.')};
+$('#liveKbps').onchange=e=>{S.liveKbps=+e.target.value;renderSettings();applyLiveBitrate();renderLive()};
+$('#turnMode').onchange=e=>{S.turnMode=e.target.value;renderSettings()};
+['turnUrl','turnUrls','turnUser','turnPass','publicUrl'].forEach(k=>$('#'+k).onchange=e=>{S[k]=e.target.value.trim();renderSettings()});
 $('#camSize').oninput=e=>{S.camSize=+e.target.value;save()};
 $('#mirror').onchange=e=>{S.mirror=e.target.checked;save();pipWin&&buildPip()};
 $('#micOn').onchange=e=>{S.micOn=e.target.checked;renderSettings();syncDevices()};
-$('#micGain').oninput=e=>{S.micGain=+e.target.value;if(rec.micGain&&!micMuted)rec.micGain.gain.value=S.micGain;save()};
+$('#micGain').oninput=e=>{S.micGain=+e.target.value;if(cap.micGain&&!micMuted)cap.micGain.gain.value=S.micGain;save()};
 $('#noise').onchange=e=>{S.noise=e.target.checked;save();if(micStream)startMic()};
 $('#sysAudio').onchange=e=>{S.sysAudio=e.target.checked;renderSettings()};
 $('#countdown').onchange=e=>{S.countdown=e.target.checked;save()};
@@ -758,13 +890,235 @@ $('#enableBtn').onclick=async()=>{ensureAudio();
 document.addEventListener('keydown',e=>{
   if(!e.altKey)return;const k=e.key.toLowerCase();
   if(k==='r'){e.preventDefault();rec.active?stopRec(true):startRec()}else if(k==='p'){e.preventDefault();togglePause()}
-  else if(k==='c'){e.preventDefault();toggleCam()}else if(k==='m'){e.preventDefault();toggleMic()}
+  else if(k==='c'){e.preventDefault();toggleCam()}else if(k==='l'){e.preventDefault();$('#liveBtn').click()}else if(k==='m'){e.preventDefault();toggleMic()}
 });
-window.addEventListener('beforeunload',e=>{if(rec.active){e.preventDefault();e.returnValue=''}});
+window.addEventListener('beforeunload',e=>{if(rec.active||live.active){e.preventDefault();e.returnValue=''}});
 navigator.mediaDevices&&navigator.mediaDevices.addEventListener&&navigator.mediaDevices.addEventListener('devicechange',listDevices);
 
+/* =====================================================================
+   LIVE CLASS  (teacher → each student, peer-to-peer via WebRTC/PeerJS)
+   ===================================================================== */
+const PEERJS_SRC=window.__peerjsSrc||'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+const PEER_OPTS=window.__peerOpts||{};
+const MAX_SUGGESTED=10;
+function loadPeerJS(){
+  if(window.Peer) return Promise.resolve();
+  return new Promise((res,rej)=>{const s=document.createElement('script');s.src=PEERJS_SRC;s.onload=res;s.onerror=()=>rej(new Error('Could not reach the live server. Are you connected to the internet?'));document.head.appendChild(s)});
+}
+function iceCfg(){
+  if(S.turnMode==='url'&&S.turnUrl.trim()) return {u:S.turnUrl.trim()};
+  if(S.turnMode==='custom'&&S.turnUrls.trim()) return {t:S.turnUrls.trim(),n:S.turnUser,p:S.turnPass};
+  return null;
+}
+async function iceServers(cfg){
+  const base=[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'},
+    {urls:['turn:eu-0.turn.peerjs.com:3478','turn:us-0.turn.peerjs.com:3478'],username:'peerjs',credential:'peerjsp'}]; // free PeerJS relay (best effort)
+  try{
+    if(cfg&&cfg.u){const r=await fetch(cfg.u);const j=await r.json();if(Array.isArray(j))return base.concat(j);if(j&&Array.isArray(j.iceServers))return base.concat(j.iceServers)}
+    if(cfg&&cfg.t)return base.concat([{urls:cfg.t.split(/[\s,]+/).filter(Boolean),username:cfg.n||'',credential:cfg.p||''}]);
+  }catch(e){console.warn('relay config failed',e)}
+  return base;
+}
+const b64e=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const b64d=s=>{try{return JSON.parse(decodeURIComponent(escape(atob(s))))}catch{return null}};
+function baseUrl(){
+  if(location.protocol==='https:') return location.origin+location.pathname;
+  return (S.publicUrl||'https://msakkary-blip.github.io/litecast/').trim();
+}
+function classLink(){
+  const u=new URL(baseUrl());u.search='';u.hash='';
+  u.searchParams.set('class',S.room);
+  const c=iceCfg();if(c)u.searchParams.set('ice',b64e(c));
+  return u.toString();
+}
+function openPeer(id,ice){
+  return new Promise((res,rej)=>{
+    const p=id?new Peer(id,Object.assign({config:{iceServers:ice},debug:1},PEER_OPTS)):new Peer(Object.assign({config:{iceServers:ice},debug:1},PEER_OPTS));
+    const t=setTimeout(()=>{cleanup();p.destroy();rej(new Error('Timed out reaching the live server.'))},20000);
+    const onErr=e=>{cleanup();p.destroy();rej(e)};
+    const onOpen=()=>{cleanup();res(p)};
+    function cleanup(){clearTimeout(t);p.off('error',onErr);p.off('open',onOpen)}
+    p.on('open',onOpen);p.on('error',onErr);
+  });
+}
+
+/* ---------- teacher ---------- */
+async function goLive(){
+  if(live.active||live.starting) return;
+  live.starting=true;$('#liveBtn').disabled=true;$('#liveBtn').textContent='⏳ Connecting…';
+  try{
+    if(location.protocol!=='https:'&&location.hostname!=='localhost') toast('Note: students will get your online address ('+baseUrl()+'). Make sure that page has the latest LiteCast.',7000);
+    try{await loadPeerJS()}catch(e){toast(e.message);return}
+    if(!S.room.match(/^[A-Za-z0-9][A-Za-z0-9_-]{3,60}$/)){S.room=newRoomId();save();renderSettings()}
+    const wasCap=cap.active;
+    if(!(await startCapture())) return;
+    live.ice=await iceServers(iceCfg());
+    let peer=null,lastErr=null;
+    for(let i=0;i<8&&!peer;i++){
+      try{peer=await openPeer(S.room,live.ice)}
+      catch(e){lastErr=e;if(e.type==='unavailable-id'){$('#liveBtn').textContent='⏳ Reclaiming link…';await sleep(5000)}else break}
+    }
+    if(!peer){toast('Could not go live: '+(lastErr&&lastErr.type==='unavailable-id'?'this class link is already in use (is LiteCast live in another tab?). Press ↻ for a new link.':lastErr?lastErr.message:'unknown error'),8000);if(!wasCap&&!rec.active)stopCapture();return}
+    live.peer=peer;live.active=true;live.t0=performance.now();live.viewers.clear();
+    peer.on('connection',onViewerConn);
+    peer.on('disconnected',()=>{if(live.active&&!peer.destroyed){sysChat('Connection to live server dropped — reconnecting…');setTimeout(()=>{try{peer.reconnect()}catch{}},1500)}});
+    peer.on('error',e=>{if(e.type!=='peer-unavailable')console.warn('peer',e.type,e)});
+    $('#liveLink').value=classLink();
+    $('#tChat').innerHTML='';live.chat=[];sysChat('Class started. Share the link with your students.');
+    renderLive();updateUi();
+    toast('📡 You are live! Copy the link or send it on WhatsApp.',5000);
+  }finally{live.starting=false;$('#liveBtn').disabled=false;updateUi()}
+}
+function endLive(){
+  if(!live.active) return;
+  broadcast({t:'end'});
+  live.active=false;
+  setTimeout(()=>{
+    for(const v of live.viewers.values()){try{v.call&&v.call.close()}catch{}try{v.conn.close()}catch{}}
+    live.viewers.clear();try{live.peer&&live.peer.destroy()}catch{}live.peer=null;renderLive();
+  },400);
+  if(!rec.active)stopCapture();
+  renderLive();updateUi();toast('Live class ended.');
+}
+function onViewerConn(conn){
+  conn.on('open',()=>{
+    const name=String((conn.metadata&&conn.metadata.name)||'Student').slice(0,40);
+    const old=live.viewers.get(conn.peer);if(old)dropViewer(conn.peer,true);
+    const v={id:conn.peer,name,conn,call:null,hand:false};
+    live.viewers.set(conn.peer,v);
+    send(v,{t:'hello',title:S.title||'Live class',chat:live.chat.slice(-40)});
+    callViewer(v);
+    sysChat(`${name} joined`);renderLive();
+    if(live.viewers.size===MAX_SUGGESTED+1) toast(`${live.viewers.size} students now — if video gets choppy, lower “Quality / student”.`,6000);
+  });
+  conn.on('data',d=>onViewerData(conn.peer,d));
+  conn.on('close',()=>dropViewer(conn.peer));
+  conn.on('error',()=>dropViewer(conn.peer));
+}
+function callViewer(v){
+  if(!live.active||!cap.stream) return;
+  try{if(v.call)v.call.close()}catch{}
+  const call=live.peer.call(v.id,cap.stream,{sdpTransform:s=>s});
+  v.call=call;
+  call.on('close',()=>{if(v.call===call)v.call=null});
+  call.on('error',()=>{});
+  limitBitrate(call);
+}
+async function limitBitrate(call){
+  for(let i=0;i<20;i++){
+    const pc=call.peerConnection;
+    if(pc){
+      const senders=pc.getSenders().filter(s=>s.track&&s.track.kind==='video');
+      let done=senders.length>0;
+      for(const s of senders){
+        const p=s.getParameters();
+        if(!p.encodings||!p.encodings.length){done=false;continue}
+        p.encodings[0].maxBitrate=S.liveKbps*1000;p.encodings[0].maxFramerate=Math.max(S.fps,10);
+        try{p.degradationPreference='maintain-resolution'}catch{}
+        try{await s.setParameters(p)}catch(e){done=false}
+      }
+      if(done) return;
+    }
+    await sleep(700);
+  }
+}
+function applyLiveBitrate(){for(const v of live.viewers.values())if(v.call)limitBitrate(v.call)}
+function dropViewer(id,silent){
+  const v=live.viewers.get(id);if(!v)return;
+  live.viewers.delete(id);try{v.call&&v.call.close()}catch{}
+  if(!silent&&live.active){sysChat(`${v.name} left`);renderLive()}
+}
+function send(v,msg){try{if(v.conn.open)v.conn.send(msg)}catch{}}
+function broadcast(msg){for(const v of live.viewers.values())send(v,msg)}
+function onViewerData(id,d){
+  const v=live.viewers.get(id);if(!v||!d||typeof d!=='object')return;
+  if(d.t==='chat'&&typeof d.text==='string'){
+    const m={from:v.name,text:d.text.slice(0,500),ts:Date.now()};addChat('#tChat',m);live.chat.push(m);broadcast({t:'chat',...m});
+  }else if(d.t==='hand'){
+    v.hand=!!d.on;renderLive();if(v.hand){toast(`✋ ${v.name} raised a hand`,4000);sysChat(`✋ ${v.name} raised a hand`)}
+  }else if(d.t==='resend'){callViewer(v)}
+}
+function sysChat(text){addChat('#tChat',{sys:true,text})}
+function addChat(sel,m){
+  const box=$(sel);if(!box)return;const d=document.createElement('div');
+  if(m.sys){d.className='sys';d.textContent=m.text}else{const b=document.createElement('b');b.textContent=m.from+': ';d.appendChild(b);d.appendChild(document.createTextNode(m.text))}
+  box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+function renderLive(){
+  $('#livePanel').classList.toggle('show',live.active);
+  const n=live.viewers.size;
+  $('#liveCount').textContent=n===1?'1 student':n+' students';
+  const list=[...live.viewers.values()];
+  $('#students').innerHTML=list.length?list.map(v=>`<span class="${v.hand?'hand':''}" data-id="${v.id}" title="${v.hand?'Click to lower hand':''}">${v.hand?'✋ ':''}${v.name.replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]))}</span>`).join(''):'<span style="opacity:.6">Waiting for students…</span>';
+  const up=(n*(S.liveKbps+40))/1000;
+  $('#liveWarn').innerHTML=n?`Your upload in use ≈ <b>${up.toFixed(1)} Mbps</b>${n>MAX_SUGGESTED?' — many students: lower “Quality / student” if anyone reports freezing.':''}`:'';
+}
+$('#students').addEventListener('click',e=>{const s=e.target.closest('span[data-id]');if(!s)return;const v=live.viewers.get(s.dataset.id);if(v&&v.hand){v.hand=false;send(v,{t:'handdown'});renderLive()}});
+$('#tForm').addEventListener('submit',e=>{e.preventDefault();const t=$('#tMsg').value.trim();if(!t||!live.active)return;const m={from:'Teacher',text:t.slice(0,500),ts:Date.now()};addChat('#tChat',m);live.chat.push(m);broadcast({t:'chat',...m});$('#tMsg').value=''});
+$('#liveBtn').onclick=()=>live.active?(confirm('End the live class for everyone?')&&endLive()):goLive();
+$('#copyLink').onclick=async()=>{try{await navigator.clipboard.writeText($('#liveLink').value);toast('Link copied ✔',1800)}catch{$('#liveLink').select();document.execCommand('copy');toast('Link copied ✔',1800)}};
+const inviteText=()=>`Join my live class "${S.title||'Lecture'}" now: ${$('#liveLink').value}`;
+$('#liveWa').onclick=()=>window.open('https://wa.me/?text='+encodeURIComponent(inviteText()),'_blank');
+$('#liveMail').onclick=()=>window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent('Live class: '+(S.title||'Lecture'))}&body=${encodeURIComponent(inviteText())}`,'_blank');
+$('#liveOpen').onclick=()=>window.open($('#liveLink').value,'_blank');
+
+/* ---------- student viewer ---------- */
+function viewerMain(classId,iceParam){
+  document.body.classList.add('viewer');document.title='LiteCast Live class';
+  const vid=$('#vVid'),stat=(t,ok)=>{$('#vStatus').textContent=t;$('#vStatus').classList.toggle('ok',!!ok)};
+  const msg=(t,play)=>{$('#vMsgTxt').textContent=t;$('#vPlay').style.display=play?'':'none';$('#vMsgOv').classList.toggle('show',!!t||!!play)};
+  let peer=null,conn=null,ended=false,retryT=null,hand=false,gotStream=false,name='';
+  try{$('#vName').value=localStorage.getItem('litecast-name')||''}catch{}
+  const retry=(ms)=>{if(ended)return;clearTimeout(retryT);retryT=setTimeout(connect,ms)};
+  async function join(){
+    name=($('#vName').value||'').trim().slice(0,40);
+    if(!name){$('#vName').focus();toast('Please type your name.');return}
+    try{localStorage.setItem('litecast-name',name)}catch{}
+    $('#vJoin').classList.remove('show');stat('Connecting…');
+    try{await loadPeerJS()}catch(e){stat(e.message);msg('Could not reach the live server. Check your internet and reload the page.');return}
+    const ice=await iceServers(iceParam?b64d(iceParam):null);
+    try{peer=await openPeer(null,ice)}catch(e){stat('Connection error');msg('Could not connect ('+(e.type||e.message)+'). Reload the page to try again.');return}
+    peer.on('call',call=>{
+      call.answer();
+      call.on('stream',st=>{gotStream=true;vid.srcObject=st;vid.muted=false;
+        vid.play().then(()=>msg('')).catch(()=>msg('',true));stat('● Live',true)});
+      call.on('close',()=>{if(!ended){gotStream=false;stat('Video interrupted — reconnecting…')}});
+    });
+    peer.on('error',e=>{
+      if(e.type==='peer-unavailable'){stat('Waiting for the teacher…');if(!gotStream)msg('The class has not started yet. This page will join automatically when it starts.');retry(5000)}
+      else if(e.type==='network'||e.type==='server-error'||e.type==='socket-error'){stat('Connection problem — retrying…');retry(5000)}
+    });
+    peer.on('disconnected',()=>{if(!ended)setTimeout(()=>{try{peer.reconnect()}catch{}},2000)});
+    connect();
+  }
+  function connect(){
+    if(ended||!peer||peer.destroyed)return;
+    try{conn&&conn.close()}catch{}
+    conn=peer.connect(classId,{metadata:{name},reliable:true});
+    conn.on('open',()=>{stat(gotStream?'● Live':'Connected — starting video…',gotStream);if(!gotStream)msg('Connected. Video is starting…')});
+    conn.on('data',d=>{
+      if(!d||typeof d!=='object')return;
+      if(d.t==='hello'){$('#vTitle').textContent=d.title||'Live class';document.title=(d.title||'Live class')+' — LiteCast Live';$('#vChat').innerHTML='';(d.chat||[]).forEach(m=>addChat('#vChat',m))}
+      else if(d.t==='chat')addChat('#vChat',d);
+      else if(d.t==='handdown'){hand=false;updHand()}
+      else if(d.t==='end'){ended=true;stat('Class ended');msg('The class has ended. Thank you for attending!');try{vid.srcObject=null}catch{};setTimeout(()=>{try{peer.destroy()}catch{}},500)}
+    });
+    conn.on('close',()=>{if(!ended){stat('Disconnected — reconnecting…');gotStream=false;retry(3000)}});
+    // if no video arrives within 12 s, ask the teacher to send it again
+    setTimeout(()=>{if(!ended&&!gotStream&&conn&&conn.open)try{conn.send({t:'resend'})}catch{}},12000);
+  }
+  function updHand(){$('#vHand').textContent=hand?'✋ Lower hand':'✋ Raise hand';$('#vHand').classList.toggle('on',hand);$('#vHandLbl').textContent=hand?'Your hand is raised':''}
+  $('#vJoinBtn').onclick=join;
+  $('#vName').addEventListener('keydown',e=>{if(e.key==='Enter')join()});
+  $('#vPlay').onclick=()=>{vid.muted=false;vid.play().then(()=>msg('')).catch(()=>{vid.muted=true;vid.play();msg('')})};
+  $('#vFs').onclick=()=>{const el=$('.vstage');(document.fullscreenElement?document.exitFullscreen():(el.requestFullscreen||el.webkitRequestFullscreen||(()=>vid.webkitEnterFullscreen&&vid.webkitEnterFullscreen())).call(el))};
+  $('#vForm').addEventListener('submit',e=>{e.preventDefault();const t=$('#vMsg').value.trim();if(!t)return;if(!conn||!conn.open){toast('Not connected yet');return}conn.send({t:'chat',text:t});$('#vMsg').value=''});
+  $('#vHand').onclick=()=>{if(!conn||!conn.open)return toast('Not connected yet');hand=!hand;conn.send({t:'hand',on:hand});updHand()};
+  window.addEventListener('beforeunload',()=>{try{peer&&peer.destroy()}catch{}});
+}
+
 /* ---------------- boot ---------------- */
-(async function boot(){
+async function boot(){
   renderSettings();renderFolder();setTick(15);updateUi();
   if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){toast('Screen recording isn’t available here. Open this file in Google Chrome or Microsoft Edge on your laptop.',10000)}
   try{recs=(await DB.all('recs')).sort((a,b)=>b.id-a.id)}catch(e){recs=[]}
@@ -776,7 +1130,9 @@ navigator.mediaDevices&&navigator.mediaDevices.addEventListener&&navigator.media
   if(needCam()&&camOk)await startCamera();
   if(S.micOn&&micOk)await startMic();
   await listDevices();refreshEnableOverlay();
-})();
+}
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+{const qp=new URLSearchParams(location.search);if(qp.get('class'))viewerMain(qp.get('class'),qp.get('ice'));else boot();}
 </script>
 </body>
 </html>
