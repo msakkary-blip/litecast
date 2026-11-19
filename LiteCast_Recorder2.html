@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LiteCast — Lightweight Screen &amp; Camera Recorder</title>
+<style>
+:root{--bg:#0e1015;--panel:#161920;--panel2:#1d212b;--line:#2a2f3b;--text:#e9ebf1;--mut:#97a0b1;--acc:#4f8cff;--rec:#ff4d4f;--ok:#2fbf71;--warn:#f5a524}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif}
+button,select,input{font:inherit;color:inherit}
+header{height:56px;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--line);background:#12141a}
+.logo{width:30px;height:30px;border-radius:9px;background:conic-gradient(from 200deg,#ff4d4f,#ff8a4d,#4f8cff,#ff4d4f);display:grid;place-items:center}
+.logo:after{content:"";width:12px;height:12px;border-radius:50%;background:#fff}
+header h1{font-size:17px;margin:0;font-weight:650;letter-spacing:.2px}
+header .sub{color:var(--mut);font-size:12.5px}
+header .sp{flex:1}
+.kbd{font-size:11.5px;color:var(--mut)}
+.kbd b{border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--text);font-weight:500;background:var(--panel2)}
+.app{display:grid;grid-template-columns:340px 1fr;height:calc(100% - 56px)}
+aside{overflow:auto;padding:14px;border-right:1px solid var(--line)}
+main{overflow:auto;padding:16px 20px 30px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:12px}
+.card h3{margin:0 0 10px;font-size:11.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--mut);font-weight:650;display:flex;align-items:center;gap:8px}
+.card h3 .n{width:18px;height:18px;border-radius:50%;background:var(--panel2);display:grid;place-items:center;font-size:10.5px;color:var(--text)}
+.seg{display:flex;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:3px}
+.seg button{flex:1;border:0;background:transparent;padding:7px 4px;border-radius:7px;cursor:pointer;color:var(--mut);font-size:12.5px;white-space:nowrap}
+.seg button.on{background:var(--acc);color:#fff}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+.row{display:flex;align-items:center;gap:8px;margin-top:9px}
+.row label{color:var(--mut);font-size:12.5px;min-width:78px}
+.row .grow{flex:1;min-width:0}
+select,input[type=text],input[type=number]{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;width:100%;outline:none}
+select:focus,input:focus{border-color:var(--acc)}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.chk{display:flex;align-items:center;gap:8px;margin-top:9px;font-size:13px;cursor:pointer}
+.chk input{accent-color:var(--acc);width:15px;height:15px}
+.hint{font-size:12px;color:var(--mut);margin-top:8px}
+.hint.warn{color:var(--warn)}
+.meter{height:6px;border-radius:4px;background:var(--panel2);overflow:hidden;border:1px solid var(--line)}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--ok),#c7e43a,var(--rec));transition:width .08s}
+.pos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:96px}
+.pos button{height:22px;border:1px solid var(--line);background:var(--panel2);border-radius:5px;cursor:pointer}
+.pos button:hover{border-color:var(--acc)}
+.est{margin-top:10px;padding:9px 10px;border-radius:9px;background:rgba(79,140,255,.08);border:1px solid rgba(79,140,255,.25);font-size:12.5px}
+.est b{font-size:15px}
+.btn{border:1px solid var(--line);background:var(--panel2);border-radius:9px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:#3b4253;background:#232836}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.rec{background:var(--rec);border-color:var(--rec);color:#fff;font-weight:600;padding:10px 20px;font-size:15px}
+.btn.rec .d{width:11px;height:11px;border-radius:50%;background:#fff}
+.btn.sm{padding:5px 9px;font-size:12.5px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.on{border-color:var(--acc);color:#9fc0ff}
+.stagewrap{position:relative;max-width:1100px;margin:0 auto}
+#stage{width:100%;display:block;background:#000;border-radius:12px;border:1px solid var(--line);touch-action:none}
+.ov{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;border-radius:12px;background:rgba(10,12,16,.72);text-align:center;padding:20px}
+.ov.show{display:flex}
+#cd{font-size:110px;font-weight:800;color:#fff;text-shadow:0 4px 30px rgba(0,0,0,.6)}
+.badge{position:absolute;top:12px;left:12px;display:none;align-items:center;gap:7px;background:rgba(0,0,0,.6);padding:5px 10px;border-radius:20px;font-weight:600;font-size:13px}
+.badge.show{display:flex}
+.badge i{width:9px;height:9px;border-radius:50%;background:var(--rec);animation:blink 1s infinite}
+.badge.paused i{animation:none;background:var(--warn)}
+@keyframes blink{50%{opacity:.25}}
+.bar{max-width:1100px;margin:12px auto 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.bar .t{font-size:22px;font-variant-numeric:tabular-nums;font-weight:600;min-width:86px}
+.bar .stat{color:var(--mut);font-size:12.5px;line-height:1.3}
+.bar .stat b{color:var(--text);font-weight:600}
+.bar .sp{flex:1}
+.lib{max-width:1100px;margin:22px auto 0}
+.lib h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+.lib h2 span{color:var(--mut);font-weight:400;font-size:12.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.item video{width:100%;aspect-ratio:16/9;background:#000;display:block;cursor:pointer;object-fit:contain}
+.item .meta{padding:9px 11px 4px}
+.item .nm{font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item .sm{color:var(--mut);font-size:12px}
+.item .acts{display:flex;flex-wrap:wrap;gap:5px;padding:6px 10px 11px}
+.empty{color:var(--mut);padding:26px;text-align:center;border:1px dashed var(--line);border-radius:12px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+.modal.show{display:flex}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;width:min(820px,100%);max-height:94vh;overflow:auto;padding:18px}
+.mbox h2{margin:0 0 12px;font-size:17px;display:flex;align-items:center}
+.mbox h2 .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:22px;line-height:1}
+.mbox video{width:100%;max-height:52vh;background:#000;border-radius:10px}
+.share{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px}
+.share .btn{justify-content:center;padding:10px}
+.pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:12px;border:1px solid var(--line);margin:4px 4px 0 0}
+.pill.ok{border-color:rgba(47,191,113,.5);color:#7fe0aa}
+.pill.warn{border-color:rgba(245,165,36,.5);color:#f8c56a}
+#toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:99;align-items:center}
+#toast div{background:#262b37;border:1px solid #384056;padding:9px 16px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.4);max-width:560px}
+#hid{position:fixed;left:-9999px;top:0;width:4px;height:4px;overflow:hidden}
+aside.locked .lockable{opacity:.5;pointer-events:none}
+a{color:#8fb4ff}
+@media(max-width:900px){.app{grid-template-columns:1fr;height:auto}aside{border-right:0}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <div><h1>LiteCast Recorder</h1><div class="sub">Small-file screen + camera recordings for online teaching</div></div>
+  <div class="sp"></div>
+  <div class="kbd"><b>Alt</b>+<b>R</b> start/stop &nbsp; <b>Alt</b>+<b>P</b> pause &nbsp; <b>Alt</b>+<b>C</b> camera &nbsp; <b>Alt</b>+<b>M</b> mic</div>
+</header>
+
+<div class="app">
+<aside id="side">
+  <div class="card lockable">
+    <h3><span class="n">1</span>What to record</h3>
+    <div class="seg" id="segMode">
+      <button data-v="screen">Screen</button>
+      <button data-v="screencam">Screen + Camera</button>
+      <button data-v="cam">Camera only</button>
+    </div>
+  </div>
+
+  <div class="card" id="camCard">
+    <h3><span class="n">2</span>Presenter camera</h3>
+    <div class="lockable">
+      <div class="seg" id="segStyle">
+        <button data-v="overlay" title="Camera is drawn into the video — works when sharing a window, a tab or the whole screen">Inside video</button>
+        <button data-v="bubble" title="Camera floats on your desktop in an always-on-top window — record the entire screen">Floating bubble</button>
+      </div>
+      <div class="hint" id="styleHint"></div>
+      <div class="row"><label>Camera</label><select id="camSel" class="grow"></select></div>
+    </div>
+    <div class="row"><label>Shape</label>
+      <div class="seg grow" id="segShape"><button data-v="circle">Circle</button><button data-v="rounded">Rounded</button><button data-v="square">Square</button></div>
+    </div>
+    <div class="row"><label>Size</label><input type="range" id="camSize" min="0.14" max="0.5" step="0.01" class="grow"></div>
+    <div class="row"><label>Position</label>
+      <div class="pos" id="posGrid"></div>
+      <span class="hint" style="margin:0">or drag it in the preview</span>
+    </div>
+    <label class="chk"><input type="checkbox" id="mirror"> Mirror camera</label>
+  </div>
+
+  <div class="card">
+    <h3><span class="n">3</span>Sound</h3>
+    <label class="chk"><input type="checkbox" id="micOn"> Microphone</label>
+    <div class="row"><label>Mic</label><select id="micSel" class="grow"></select></div>
+    <div class="row"><label>Level</label><div class="meter grow"><i id="meter"></i></div></div>
+    <div class="row"><label>Mic volume</label><input type="range" id="micGain" min="0" max="2" step="0.05" class="grow"></div>
+    <label class="chk lockable"><input type="checkbox" id="noise"> Noise &amp; echo reduction</label>
+    <label class="chk lockable"><input type="checkbox" id="sysAudio"> Computer sound (videos, apps)</label>
+    <div class="hint">For computer sound, tick <i>“Also share system audio”</i> in the browser’s share dialog.</div>
+  </div>
+
+  <div class="card lockable">
+    <h3><span class="n">4</span>File size &amp; quality</h3>
+    <div class="seg" id="segPreset">
+      <button data-v="tiny">Tiny</button><button data-v="small">Small</button><button data-v="balanced">Balanced</button><button data-v="hd">HD</button>
+    </div>
+    <div class="row"><label>Resolution</label><select id="res" class="grow">
+      <option value="854x480">480p (854×480)</option><option value="960x540">540p (960×540)</option>
+      <option value="1280x720">720p (1280×720)</option><option value="1600x900">900p (1600×900)</option>
+      <option value="1920x1080">1080p (1920×1080)</option></select></div>
+    <div class="row"><label>Frame rate</label><select id="fps" class="grow">
+      <option>5</option><option>8</option><option>10</option><option>12</option><option>15</option><option>20</option><option>24</option><option>30</option></select></div>
+    <div class="row"><label>Video kbps</label><input type="range" id="vk" min="100" max="3000" step="25" class="grow"><span id="vkv" style="width:46px;text-align:right"></span></div>
+    <div class="row"><label>Audio kbps</label><select id="ak" class="grow">
+      <option>24</option><option>32</option><option>48</option><option>64</option><option>96</option><option>128</option></select></div>
+    <div class="row"><label>Format</label><select id="fmt" class="grow"></select></div>
+    <div class="est" id="est"></div>
+  </div>
+
+  <div class="card">
+    <h3><span class="n">5</span>Saving</h3>
+    <div class="row"><label>File name</label><input type="text" id="title" class="grow" placeholder="e.g. Econometrics L5 – Panel data"></div>
+    <div class="row"><label>Auto-save</label><div class="grow" id="folderLbl" style="font-size:12.5px;color:var(--mut)">Not set</div></div>
+    <div class="row"><button class="btn sm" id="pickFolder">Choose folder…</button><button class="btn sm" id="clearFolder">Clear</button></div>
+    <div class="hint">Tip: choose your <b>Google Drive</b> folder (Google Drive for desktop, e.g. <i>G:\My Drive\Lectures</i>) and every recording uploads itself automatically.</div>
+    <label class="chk lockable"><input type="checkbox" id="countdown"> 3-second countdown before recording</label>
+  </div>
+</aside>
+
+<main>
+  <div class="stagewrap">
+    <canvas id="stage" width="1280" height="720"></canvas>
+    <div class="badge" id="badge"><i></i><span id="badgeT">REC</span></div>
+    <div class="ov" id="ovEnable">
+      <div style="font-size:16px;font-weight:600">Allow camera &amp; microphone</div>
+      <div style="color:var(--mut);max-width:420px">The browser will ask once. You can still record the screen only without them.</div>
+      <button class="btn pri" id="enableBtn">Enable camera &amp; mic</button>
+    </div>
+    <div class="ov" id="ovCd"><div id="cd">3</div></div>
+  </div>
+
+  <div class="bar">
+    <button class="btn rec" id="recBtn"><span class="d"></span><span id="recLbl">Start recording</span></button>
+    <button class="btn" id="pauseBtn" disabled>⏸ Pause</button>
+    <div class="t" id="timer">00:00</div>
+    <div class="stat">Size <b id="liveSize">0 KB</b><br><span id="liveRate">—</span></div>
+    <div class="sp"></div>
+    <button class="btn sm" id="camToggle" title="Show / hide your face (Alt+C)">🎥 Camera on</button>
+    <button class="btn sm" id="micToggle" title="Mute / unmute (Alt+M)">🎙 Mic on</button>
+    <button class="btn sm" id="pipBtn" title="Always-on-top camera bubble / mini controls">⧉ Floating window</button>
+  </div>
+
+  <div class="lib">
+    <h2>My recordings <span id="libInfo"></span></h2>
+    <div class="grid" id="grid"></div>
+  </div>
+</main>
+</div>
+
+<div class="modal" id="modal"><div class="mbox">
+  <h2>Recording ready <span class="x" id="mClose">×</span></h2>
+  <video id="mVid" controls playsinline></video>
+  <div class="row"><label>File name</label><input type="text" id="mName" class="grow"><button class="btn sm" id="mRename">Rename</button></div>
+  <div id="mInfo" style="margin-top:8px"></div>
+  <div class="share">
+    <button class="btn pri" id="sDl">⬇ Download</button>
+    <button class="btn" id="sSave">💾 Save as…</button>
+    <button class="btn" id="sShare">↗ Share…</button>
+    <button class="btn" id="sDrive">☁ Google Drive</button>
+    <button class="btn" id="sWa">💬 WhatsApp</button>
+    <button class="btn" id="sMail">✉ Email</button>
+  </div>
+  <div class="hint" id="mHint"></div>
+</div></div>
+
+<div id="toast"></div>
+<div id="hid"></div>
+
+<script>
+'use strict';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const stage=$('#stage'), ctx=stage.getContext('2d',{alpha:false});
+
+/* ---------------- settings ---------------- */
+const PRESETS={
+  tiny:    {w:854, h:480, fps:10,vk:200, ak:32},
+  small:   {w:1280,h:720, fps:12,vk:400, ak:48},
+  balanced:{w:1280,h:720, fps:20,vk:750, ak:64},
+  hd:      {w:1920,h:1080,fps:30,vk:1600,ak:96}
+};
+const S=Object.assign({mode:'screencam',camStyle:'overlay',shape:'circle',camSize:0.26,camX:0.86,camY:0.78,mirror:true,
+  camId:'',micId:'',micOn:true,micGain:1,noise:true,sysAudio:true,preset:'small',w:1280,h:720,fps:12,vk:400,ak:48,
+  format:'mp4',countdown:true,title:'Lecture',camVisible:true},(()=>{try{return JSON.parse(localStorage.getItem('litecast')||'{}')}catch{return{}}})());
+S.camVisible=true;
+const save=()=>{try{localStorage.setItem('litecast',JSON.stringify(S))}catch{}};
+
+/* ---------------- helpers ---------------- */
+function toast(msg,ms=3800){const d=document.createElement('div');d.innerHTML=msg;$('#toast').appendChild(d);setTimeout(()=>d.remove(),ms)}
+const fmtDur=ms=>{const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s/60)%60,x=s%60;return (h?h+':'+String(m).padStart(2,'0'):String(m).padStart(2,'0'))+':'+String(x).padStart(2,'0')};
+const fmtSize=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(0)+' KB':b<1073741824?(b/1048576).toFixed(b<10485760?2:1)+' MB':(b/1073741824).toFixed(2)+' GB';
+const safeName=s=>(s||'Recording').replace(/[\\/:*?"<>|]+/g,'-').replace(/\s+/g,' ').trim().slice(0,80)||'Recording';
+const stamp=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}`};
+const even=n=>Math.max(2,Math.round(n/2)*2);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+/* ---------------- formats ---------------- */
+const FORMATS={
+  mp4:{label:'MP4 (H.264) — plays everywhere: WhatsApp, phones, email',list:['video/mp4;codecs=avc1.640028,mp4a.40.2','video/mp4;codecs=avc1.4D401F,mp4a.40.2','video/mp4;codecs=avc1.42E01F,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2','video/mp4;codecs=avc1.42E01F,opus','video/mp4;codecs=avc1,opus','video/mp4']},
+  vp9:{label:'WebM (VP9) — sharper at the same size; best for Drive/PC',list:['video/webm;codecs=vp9,opus']},
+  av1:{label:'WebM (AV1) — sharpest at the same size; slower PCs may lag',list:['video/webm;codecs=av01,opus','video/webm;codecs=av1,opus']},
+  vp8:{label:'WebM (VP8) — oldest, most compatible WebM',list:['video/webm;codecs=vp8,opus','video/webm']}
+};
+const supported=f=>window.MediaRecorder&&FORMATS[f].list.find(m=>MediaRecorder.isTypeSupported(m));
+function pickMime(){for(const f of [S.format,'mp4','vp9','vp8']){const m=supported(f);if(m)return m}return ''}
+
+/* ---------------- timer worker (keeps running when this tab is in the background) ---------------- */
+let ticker,tickMs=0;
+try{ticker=new Worker(URL.createObjectURL(new Blob(['let t=null;onmessage=e=>{clearInterval(t);if(e.data>0)t=setInterval(()=>postMessage(0),e.data)}'],{type:'text/javascript'})));ticker.onmessage=onTick}
+catch{let t=null;ticker={postMessage:ms=>{clearInterval(t);if(ms>0)t=setInterval(onTick,ms)}}}
+function setTick(fps){const ms=Math.round(1000/fps);if(ms!==tickMs){tickMs=ms;ticker.postMessage(ms)}}
+
+/* ---------------- frame sources ---------------- */
+class FrameSrc{
+  constructor(track){
+    this.alive=true;this.frame=null;this.vid=null;
+    if('MediaStreamTrackProcessor' in window){
+      try{this.clone=track.clone();this.reader=new MediaStreamTrackProcessor({track:this.clone}).readable.getReader();this.loop();return}catch(e){}
+    }
+    const v=document.createElement('video');v.muted=true;v.playsInline=true;v.srcObject=new MediaStream([track]);$('#hid').appendChild(v);v.play().catch(()=>{});this.vid=v;
+  }
+  async loop(){try{while(this.alive){const{value,done}=await this.reader.read();if(done)break;if(this.frame)this.frame.close();this.frame=value;if(!this.alive){value.close();this.frame=null}}}catch(e){}}
+  get w(){return this.frame?this.frame.displayWidth:this.vid?this.vid.videoWidth:0}
+  get h(){return this.frame?this.frame.displayHeight:this.vid?this.vid.videoHeight:0}
+  get img(){return this.frame||(this.vid&&this.vid.readyState>=2?this.vid:null)}
+  stop(){this.alive=false;try{this.reader&&this.reader.cancel()}catch{}if(this.frame){this.frame.close();this.frame=null}if(this.clone)this.clone.stop();if(this.vid){this.vid.srcObject=null;this.vid.remove()}}
+}
+
+/* ---------------- state ---------------- */
+let camStream=null,micStream=null,displayStream=null,camSrc=null,scrSrc=null,audioCtx=null,analyser=null,meterBuf=null,micMuted=false;
+const rec={active:false,paused:false,mr:null,chunks:[],bytes:0,t0:0,acc:0,direct:false,vtrack:null,mime:'',micGain:null,extra:[],W:0,H:0};
+const elapsed=()=>rec.active?rec.acc+(rec.paused?0:performance.now()-rec.t0):0;
+let pipWin=null;
+
+/* ---------------- drawing ---------------- */
+function camRect(W,H){
+  const d=S.camSize*H, w=S.shape==='rounded'?d*4/3:d, h=d;
+  let x=S.camX*W-w/2, y=S.camY*H-h/2;
+  const m=Math.round(H*0.025);
+  x=Math.min(Math.max(m,x),W-w-m); y=Math.min(Math.max(m,y),H-h-m);
+  return {x,y,w,h};
+}
+function drawCover(src,x,y,w,h,mirror){
+  const img=src.img; if(!img||!src.w) return false;
+  const sc=Math.max(w/src.w,h/src.h), cw=w/sc, ch=h/sc, sx=(src.w-cw)/2, sy=(src.h-ch)/2;
+  if(mirror){ctx.save();ctx.translate(x+w,y);ctx.scale(-1,1);ctx.drawImage(img,sx,sy,cw,ch,0,0,w,h);ctx.restore()}
+  else ctx.drawImage(img,sx,sy,cw,ch,x,y,w,h);
+  return true;
+}
+function drawContain(src,W,H){
+  const img=src.img; if(!img||!src.w) return false;
+  const sc=Math.min(W/src.w,H/src.h), w=src.w*sc, h=src.h*sc;
+  ctx.drawImage(img,(W-w)/2,(H-h)/2,w,h); return true;
+}
+function shapePath(r){
+  ctx.beginPath();
+  if(S.shape==='circle') ctx.arc(r.x+r.w/2,r.y+r.h/2,r.w/2,0,Math.PI*2);
+  else if(S.shape==='rounded'&&ctx.roundRect) ctx.roundRect(r.x,r.y,r.w,r.h,r.h*0.14);
+  else ctx.rect(r.x,r.y,r.w,r.h);
+}
+function placeholder(W,H,text){
+  ctx.fillStyle='#14171e';ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='#1f2430';ctx.lineWidth=1;const g=Math.round(H/12);
+  for(let x=0;x<W;x+=g){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+  for(let y=0;y<H;y+=g){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+  ctx.fillStyle='#6b7486';ctx.font=`${Math.round(H/26)}px Segoe UI,system-ui`;ctx.textAlign='center';ctx.fillText(text,W/2,H/2);
+}
+function draw(){
+  const W=stage.width,H=stage.height;
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  if(S.mode==='cam'){
+    if(!(camSrc&&S.camVisible&&drawCover(camSrc,0,0,W,H,S.mirror))) placeholder(W,H,camSrc?'Camera hidden':'Camera preview');
+    return;
+  }
+  if(!(scrSrc&&drawContain(scrSrc,W,H))) placeholder(W,H,'Your screen appears here after you press Start');
+  const showCam=S.mode==='screencam'&&camSrc&&S.camVisible&&!(rec.active&&rec.direct);
+  if(showCam&&!(S.camStyle==='bubble'&&rec.active)){
+    const r=camRect(W,H);
+    ctx.save();shapePath(r);ctx.clip();
+    if(!drawCover(camSrc,r.x,r.y,r.w,r.h,S.mirror)){ctx.fillStyle='#222';ctx.fill()}
+    ctx.restore();
+    shapePath(r);ctx.lineWidth=Math.max(2,H/240);ctx.strokeStyle='rgba(255,255,255,.95)';ctx.stroke();
+    if(S.camStyle==='bubble'&&!rec.active){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(r.x,r.y+r.h-22,r.w,22);ctx.fillStyle='#fff';ctx.font='12px Segoe UI';ctx.textAlign='center';ctx.fillText('floating bubble',r.x+r.w/2,r.y+r.h-7)}
+  }
+}
+
+/* ---------------- tick ---------------- */
+let lastUi=0;
+function onTick(){
+  if(!document.hidden||rec.active) draw();
+  if(rec.active&&!rec.direct&&!rec.paused&&rec.vtrack&&rec.vtrack.requestFrame) rec.vtrack.requestFrame();
+  const n=performance.now();
+  if(n-lastUi>200){lastUi=n;meter();updateUi()}
+}
+function meter(){
+  if(!analyser){$('#meter').style.width='0';return}
+  analyser.getFloatTimeDomainData(meterBuf);let s=0;for(const v of meterBuf)s+=v*v;
+  const db=20*Math.log10(Math.sqrt(s/meterBuf.length)+1e-8);
+  $('#meter').style.width=Math.max(0,Math.min(100,(db+60)/60*100))+'%';
+}
+
+/* ---------------- devices ---------------- */
+async function listDevices(){
+  try{
+    const ds=await navigator.mediaDevices.enumerateDevices();
+    const fill=(sel,kind,cur)=>{const L=ds.filter(d=>d.kind===kind);sel.innerHTML=L.map((d,i)=>`<option value="${d.deviceId}">${d.label||(kind==='videoinput'?'Camera ':'Microphone ')+(i+1)}</option>`).join('')||'<option value="">None found</option>';if(cur&&L.some(d=>d.deviceId===cur))sel.value=cur};
+    fill($('#camSel'),'videoinput',S.camId);fill($('#micSel'),'audioinput',S.micId);
+  }catch{}
+}
+async function startCamera(){
+  stopCamera();
+  try{
+    camStream=await navigator.mediaDevices.getUserMedia({video:{deviceId:S.camId?{exact:S.camId}:undefined,width:{ideal:640},height:{ideal:480},frameRate:{ideal:24}}});
+    camSrc=new FrameSrc(camStream.getVideoTracks()[0]);
+    if(pipWin)buildPip();
+  }catch(e){camStream=null;toast('Camera unavailable: '+e.message)}
+}
+function stopCamera(){if(camSrc){camSrc.stop();camSrc=null}if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null}}
+async function startMic(){
+  stopMic(); if(!S.micOn) return;
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{deviceId:S.micId?{exact:S.micId}:undefined,channelCount:1,noiseSuppression:S.noise,echoCancellation:S.noise,autoGainControl:true}});
+    ensureAudio();
+    analyser=audioCtx.createAnalyser();analyser.fftSize=1024;meterBuf=new Float32Array(analyser.fftSize);
+    audioCtx.createMediaStreamSource(micStream).connect(analyser);
+  }catch(e){micStream=null;toast('Microphone unavailable: '+e.message)}
+}
+function stopMic(){analyser=null;if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null}}
+function ensureAudio(){if(!audioCtx)audioCtx=new AudioContext();if(audioCtx.state!=='running')audioCtx.resume().catch(()=>{})}
+const needCam=()=>S.mode!=='screen';
+async function syncDevices(){
+  if(needCam()&&!camStream) await startCamera();
+  if(!needCam()&&camStream) stopCamera();
+  if(S.micOn&&!micStream) await startMic();
+  if(!S.micOn&&micStream) stopMic();
+  await listDevices(); refreshEnableOverlay();
+}
+async function refreshEnableOverlay(){
+  const missing=(needCam()&&!camStream)||(S.micOn&&!micStream);
+  $('#ovEnable').classList.toggle('show',missing&&!rec.active);
+}
+
+/* ---------------- canvas size ---------------- */
+function idleSize(){
+  if(rec.active) return;
+  if(stage.width!==S.w||stage.height!==S.h){stage.width=S.w;stage.height=S.h}
+}
+
+/* ---------------- recording ---------------- */
+async function startRec(){
+  if(rec.active) return;
+  if(!window.MediaRecorder) return toast('This browser cannot record. Please use Google Chrome or Microsoft Edge.');
+  const screenNeeded=S.mode!=='cam';
+  const bubble=S.mode==='screencam'&&S.camStyle==='bubble';
+  if(needCam()&&!camStream) await startCamera();
+  if(S.micOn&&!micStream) await startMic();
+  if(bubble&&!pipWin){try{await openPip()}catch(e){}}
+  if(screenNeeded){
+    try{
+      const v={width:{max:S.w},height:{max:S.h},frameRate:{ideal:S.fps,max:S.fps}};
+      if(bubble) v.displaySurface='monitor';
+      displayStream=await navigator.mediaDevices.getDisplayMedia({video:v,
+        audio:S.sysAudio?{echoCancellation:false,noiseSuppression:false,autoGainControl:false}:false,
+        systemAudio:S.sysAudio?'include':'exclude',selfBrowserSurface:'exclude',surfaceSwitching:'include',monitorTypeSurfaces:'include'});
+    }catch(e){
+      if(e.name==='NotAllowedError'&&/activation|gesture/i.test(e.message)) toast('Please click <b>Start recording</b> again.');
+      else toast('Screen sharing was cancelled.');
+      return;
+    }
+    const vt=displayStream.getVideoTracks()[0];
+    try{vt.contentHint='detail'}catch{}
+    vt.addEventListener('ended',()=>{if(rec.active)stopRec(false)});
+    scrSrc=new FrameSrc(vt);
+    if(S.sysAudio&&!displayStream.getAudioTracks().length) toast('No computer sound captured — tick “Also share system audio” next time if you need it.',5000);
+  }
+  // audio mix
+  ensureAudio();
+  const dest=audioCtx.createMediaStreamDestination();dest.channelCount=1;
+  let hasAudio=false;rec.extra=[];
+  if(S.micOn&&micStream){
+    const src=audioCtx.createMediaStreamSource(micStream),g=audioCtx.createGain();g.gain.value=micMuted?0:S.micGain;src.connect(g).connect(dest);rec.micGain=g;rec.extra.push(src,g);hasAudio=true;
+  } else rec.micGain=null;
+  if(displayStream&&displayStream.getAudioTracks().length){
+    const src=audioCtx.createMediaStreamSource(new MediaStream(displayStream.getAudioTracks())),g=audioCtx.createGain();g.gain.value=0.8;src.connect(g).connect(dest);rec.extra.push(src,g);hasAudio=true;
+  }
+  // video track
+  rec.direct=bubble;
+  let vtrack;
+  if(rec.direct){
+    vtrack=displayStream.getVideoTracks()[0];
+    await waitDims(scrSrc);rec.W=scrSrc.w;rec.H=scrSrc.h;
+    sizeStage(scrSrc.w,scrSrc.h);
+  }else{
+    if(screenNeeded){await waitDims(scrSrc);sizeStage(scrSrc.w,scrSrc.h)} else sizeStage(S.w,S.h);
+    rec.W=stage.width;rec.H=stage.height;
+    vtrack=stage.captureStream(0).getVideoTracks()[0];
+  }
+  rec.vtrack=vtrack;
+  if(S.countdown) await countdown();
+  if(screenNeeded&&(!displayStream||!displayStream.active)){cleanupStreams();return}
+  const tracks=[vtrack];if(hasAudio)tracks.push(dest.stream.getAudioTracks()[0]);
+  rec.mime=pickMime();
+  const opts={videoBitsPerSecond:S.vk*1000,audioBitsPerSecond:S.ak*1000,videoKeyFrameIntervalDuration:10000};
+  if(rec.mime)opts.mimeType=rec.mime;
+  try{rec.mr=new MediaRecorder(new MediaStream(tracks),opts)}
+  catch(e){delete opts.mimeType;rec.mr=new MediaRecorder(new MediaStream(tracks),opts);rec.mime=rec.mr.mimeType}
+  rec.chunks=[];rec.bytes=0;
+  rec.mr.ondataavailable=e=>{if(e.data&&e.data.size){rec.chunks.push(e.data);rec.bytes+=e.data.size}};
+  rec.mr.onstop=finalize;
+  rec.mr.start(1000);
+  rec.active=true;rec.paused=false;rec.acc=0;rec.t0=performance.now();
+  setTick(rec.direct?8:S.fps);
+  $('#side').classList.add('locked');refreshEnableOverlay();updateUi();
+}
+function waitDims(src){return new Promise(async r=>{for(let i=0;i<60;i++){if(src&&src.w)return r();await sleep(50)}r()})}
+function sizeStage(sw,sh){
+  if(!sw||!sh){sw=S.w;sh=S.h}
+  const sc=Math.min(S.w/sw,S.h/sh,1);
+  stage.width=even(sw*sc);stage.height=even(sh*sc);
+}
+async function countdown(){
+  const ov=$('#ovCd');ov.classList.add('show');
+  for(let i=3;i>0;i--){$('#cd').textContent=i;if(pipWin){const c=pipWin.document.getElementById('pcd');if(c){c.style.display='flex';c.textContent=i}}await sleep(1000)}
+  ov.classList.remove('show');if(pipWin){const c=pipWin.document.getElementById('pcd');if(c)c.style.display='none'}
+}
+function togglePause(){
+  if(!rec.active)return;
+  if(rec.paused){rec.mr.resume();rec.t0=performance.now();rec.paused=false}
+  else{rec.mr.pause();rec.acc+=performance.now()-rec.t0;rec.paused=true}
+  updateUi();
+}
+async function stopRec(fromGesture=true){
+  if(!rec.active)return;
+  rec.dur=elapsed();
+  if(fromGesture&&folderHandle){try{if(await folderHandle.queryPermission({mode:'readwrite'})!=='granted')await folderHandle.requestPermission({mode:'readwrite'})}catch{}}
+  if(rec.mr&&rec.mr.state!=='inactive')rec.mr.stop();
+}
+function cleanupStreams(){
+  if(scrSrc){scrSrc.stop();scrSrc=null}
+  if(displayStream){displayStream.getTracks().forEach(t=>t.stop());displayStream=null}
+  rec.extra.forEach(n=>{try{n.disconnect()}catch{}});rec.extra=[];
+}
+async function finalize(){
+  const dur=rec.dur||elapsed();
+  rec.active=false;rec.paused=false;cleanupStreams();
+  if(rec.vtrack&&!rec.direct)rec.vtrack.stop();
+  setTick(15);$('#side').classList.remove('locked');idleSize();refreshEnableOverlay();
+  const type=(rec.mime||rec.chunks[0]?.type||'video/webm').split(';')[0];
+  let blob=new Blob(rec.chunks,{type});rec.chunks=[];
+  if(type.includes('webm')){try{blob=await fixWebmDuration(blob,dur)}catch(e){}}
+  const ext=type.includes('mp4')?'mp4':'webm';
+  const item={id:Date.now(),name:`${safeName(S.title)}_${stamp()}.${ext}`,blob,size:blob.size,dur,created:Date.now(),mime:type,w:rec.W,h:rec.H,codec:rec.mime};
+  recs.unshift(item);try{await DB.put('recs',item)}catch(e){toast('Could not store in browser library: '+e.message)}
+  renderLib();updateUi();
+  if(folderHandle) await saveToFolder(item,true);
+  openResult(item);
+}
+
+/* ---------------- WebM duration fix (MediaRecorder writes no duration → players can't seek) ---------------- */
+async function fixWebmDuration(blob,ms){
+  const headLen=Math.min(blob.size,1<<17);
+  const buf=new Uint8Array(await blob.slice(0,headLen).arrayBuffer());
+  const rdId=p=>{const b=buf[p];let l=1,m=0x80;while(l<=4&&!(b&m)){l++;m>>=1}let v=0;for(let i=0;i<l;i++)v=v*256+buf[p+i];return{v,l}};
+  const rdSz=p=>{const b=buf[p];let l=1,m=0x80;while(l<=8&&!(b&m)){l++;m>>=1}let v=b&(m-1),ones=v===m-1;for(let i=1;i<l;i++){if(buf[p+i]!==255)ones=false;v=v*256+buf[p+i]}return{v,l,unk:ones}};
+  let p=0,id=rdId(p);if(id.v!==0x1A45DFA3)return blob;p+=id.l;let s=rdSz(p);p+=s.l+s.v;
+  id=rdId(p);if(id.v!==0x18538067)return blob;p+=id.l;s=rdSz(p);p+=s.l;
+  while(p<buf.length-12){
+    id=rdId(p);s=rdSz(p+id.l);const ds=p+id.l+s.l;
+    if(id.v===0x1549A966){
+      const end=ds+s.v;if(end>buf.length)return blob;
+      let q=ds,dPos=-1,dLen=0;
+      while(q<end){const c=rdId(q),cs=rdSz(q+c.l);if(c.v===0x4489){dPos=q+c.l+cs.l;dLen=cs.v}q+=c.l+cs.l+cs.v}
+      if(dPos>=0){const dv=new DataView(buf.buffer);if(dLen===8)dv.setFloat64(dPos,ms);else if(dLen===4)dv.setFloat32(dPos,ms);return new Blob([buf,blob.slice(headLen)],{type:blob.type})}
+      const dur=new Uint8Array(11);dur.set([0x44,0x89,0x88]);new DataView(dur.buffer).setFloat64(3,ms);
+      const sz=new Uint8Array(8);sz[0]=1;let n=s.v+11;for(let i=7;i>=1;i--){sz[i]=n%256;n=Math.floor(n/256)}
+      return new Blob([buf.slice(0,p+id.l),sz,buf.slice(ds,end),dur,buf.slice(end),blob.slice(headLen)],{type:blob.type});
+    }
+    if(id.v===0x1F43B675||s.unk)break;
+    p=ds+s.v;
+  }
+  return blob;
+}
+
+/* ---------------- IndexedDB library ---------------- */
+const DB={db:null,
+  open(){return this.db?Promise.resolve(this.db):new Promise((res,rej)=>{const r=indexedDB.open('litecast',1);r.onupgradeneeded=()=>{r.result.createObjectStore('recs',{keyPath:'id'});r.result.createObjectStore('kv')};r.onsuccess=()=>res(this.db=r.result);r.onerror=()=>rej(r.error)})},
+  async run(store,mode,fn){const d=await this.open();return new Promise((res,rej)=>{const t=d.transaction(store,mode),q=fn(t.objectStore(store));t.oncomplete=()=>res(q&&q.result);t.onerror=()=>rej(t.error)})},
+  put(st,v,k){return this.run(st,'readwrite',s=>s.put(v,k))},get(st,k){return this.run(st,'readonly',s=>s.get(k))},
+  all(st){return this.run(st,'readonly',s=>s.getAll())},del(st,k){return this.run(st,'readwrite',s=>s.delete(k))}};
+let recs=[];
+const urls=new Map();const urlOf=it=>{if(!urls.has(it.id))urls.set(it.id,URL.createObjectURL(it.blob));return urls.get(it.id)};
+
+function renderLib(){
+  const g=$('#grid');
+  if(!recs.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No recordings yet. Press <b>Start recording</b> — your lessons will appear here (kept in this browser until you delete them).</div>';$('#libInfo').textContent='';return}
+  const tot=recs.reduce((a,r)=>a+r.size,0);$('#libInfo').textContent=`${recs.length} · ${fmtSize(tot)} stored in this browser`;
+  g.innerHTML=recs.map(r=>`<div class="item" data-id="${r.id}">
+    <video src="${urlOf(r)}#t=0.5" preload="metadata" muted data-a="open"></video>
+    <div class="meta"><div class="nm" title="${r.name}">${r.name}</div>
+    <div class="sm">${fmtDur(r.dur)} · <b style="color:var(--text)">${fmtSize(r.size)}</b> · ${r.w}×${r.h} · ${r.mime.includes('mp4')?'MP4':'WebM'}</div></div>
+    <div class="acts"><button class="btn sm" data-a="open">▶ Open</button><button class="btn sm" data-a="dl">⬇</button><button class="btn sm" data-a="share">↗</button><button class="btn sm" data-a="drive">☁</button><button class="btn sm" data-a="wa">💬</button><button class="btn sm" data-a="mail">✉</button><button class="btn sm" data-a="del" title="Delete">🗑</button></div></div>`).join('');
+}
+$('#grid').addEventListener('click',async e=>{
+  const a=e.target.closest('[data-a]');if(!a)return;const id=+e.target.closest('.item').dataset.id;const it=recs.find(r=>r.id===id);if(!it)return;
+  const act=a.dataset.a;
+  if(act==='open')openResult(it);else if(act==='dl')download(it);else if(act==='share')shareSys(it);else if(act==='drive')toDrive(it);else if(act==='wa')toWhatsApp(it);else if(act==='mail')toMail(it);
+  else if(act==='del'){if(!confirm(`Delete “${it.name}” from the library?`))return;recs=recs.filter(r=>r!==it);if(urls.has(id)){URL.revokeObjectURL(urls.get(id));urls.delete(id)}await DB.del('recs',id).catch(()=>{});renderLib()}
+});
+
+/* ---------------- sharing ---------------- */
+function download(it){const a=document.createElement('a');a.href=urlOf(it);a.download=it.name;document.body.appendChild(a);a.click();a.remove()}
+async function saveAs(it){
+  if(!window.showSaveFilePicker){download(it);return}
+  try{const ext=it.name.split('.').pop();const h=await showSaveFilePicker({suggestedName:it.name,startIn:'videos',types:[{description:'Video',accept:{[it.mime]:['.'+ext]}}]});const w=await h.createWritable();await w.write(it.blob);await w.close();toast('Saved ✔')}
+  catch(e){if(e.name!=='AbortError')download(it)}
+}
+const fileOf=it=>new File([it.blob],it.name,{type:it.mime});
+async function shareSys(it){
+  const f=fileOf(it);
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:it.name});}catch(e){if(e.name!=='AbortError')toast('Sharing failed: '+e.message)}}
+  else{download(it);toast('System sharing isn’t available here — the file was downloaded instead.')}
+}
+async function toDrive(it){
+  if(folderHandle&&it.savedTo){toast(`Already saved to “${it.savedTo}”. If that’s your Google Drive folder it is syncing now.`);return}
+  download(it);window.open('https://drive.google.com/drive/my-drive','_blank');
+  toast('File downloaded — drag it from your <b>Downloads</b> into the Google Drive tab, then use <b>Share → Copy link</b>.<br>Tip: set your Google Drive folder as the <b>Auto-save</b> folder to skip this step.',8000);
+}
+async function toWhatsApp(it){
+  const f=fileOf(it);
+  if(navigator.canShare&&navigator.canShare({files:[f]})&&confirm('Use the Windows share menu (pick WhatsApp)?\n\nOK = Share menu   ·   Cancel = WhatsApp Web')){try{await navigator.share({files:[f],title:it.name});return}catch(e){if(e.name==='AbortError')return}}
+  download(it);window.open('https://web.whatsapp.com/','_blank');
+  toast('File downloaded — in WhatsApp open the chat, click <b>📎 → Document</b> (keeps quality, up to 2 GB) or <b>Photos &amp; videos</b>, and pick the file.',8000);
+}
+async function toMail(it){
+  const MB=it.size/1048576;
+  download(it);
+  const body=`Hello,\n\nPlease find the recorded lesson "${it.name}" (${fmtDur(it.dur)}, ${fmtSize(it.size)}) attached.\n\nBest regards`;
+  window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${encodeURIComponent(it.name.replace(/\.\w+$/,''))}&body=${encodeURIComponent(body)}`,'_blank');
+  toast(MB>24?'File downloaded. It is over 25 MB, so Gmail will attach it as a Google Drive link automatically — just attach it as usual.':'File downloaded — click the 📎 paperclip in the Gmail window and choose it.',8000);
+}
+let cur=null;
+function openResult(it){
+  cur=it;$('#mVid').src=urlOf(it);$('#mName').value=it.name.replace(/\.\w+$/,'');
+  const MB=it.size/1048576;
+  $('#mInfo').innerHTML=`<span class="pill">${fmtDur(it.dur)}</span><span class="pill">${fmtSize(it.size)}</span><span class="pill">${it.w}×${it.h}</span><span class="pill">${(it.codec||it.mime).replace('video/','')}</span>`+
+    `<span class="pill ${MB<=24?'ok':'warn'}">Email ${MB<=24?'✓ fits as attachment':'→ sent as Drive link (>25 MB)'}</span>`+
+    `<span class="pill ${MB<=100?'ok':'warn'}">WhatsApp ${MB<=100?'✓':'→ send as Document'}</span>`+
+    (it.savedTo?`<span class="pill ok">Saved to “${it.savedTo}”</span>`:'');
+  $('#mHint').innerHTML=it.mime.includes('webm')?'WebM plays in Chrome, Edge, Firefox, Android and Google Drive. For iPhones / WhatsApp previews choose <b>MP4</b> in step 4.':'';
+  $('#modal').classList.add('show');
+}
+$('#mClose').onclick=()=>{$('#modal').classList.remove('show');$('#mVid').pause()};
+$('#modal').onclick=e=>{if(e.target.id==='modal')$('#mClose').onclick()};
+$('#mRename').onclick=async()=>{if(!cur)return;const ext=cur.name.split('.').pop();cur.name=safeName($('#mName').value)+'.'+ext;await DB.put('recs',cur).catch(()=>{});renderLib();toast('Renamed')};
+$('#sDl').onclick=()=>cur&&download(cur);$('#sSave').onclick=()=>cur&&saveAs(cur);$('#sShare').onclick=()=>cur&&shareSys(cur);
+$('#sDrive').onclick=()=>cur&&toDrive(cur);$('#sWa').onclick=()=>cur&&toWhatsApp(cur);$('#sMail').onclick=()=>cur&&toMail(cur);
+
+/* ---------------- auto-save folder ---------------- */
+let folderHandle=null;
+async function saveToFolder(it,quiet){
+  try{
+    if(await folderHandle.queryPermission({mode:'readwrite'})!=='granted'){toast(`Couldn’t auto-save (folder permission needed). Use <b>Save as…</b> or press Stop with the button next time.`,6000);return}
+    const fh=await folderHandle.getFileHandle(it.name,{create:true});const w=await fh.createWritable();await w.write(it.blob);await w.close();
+    it.savedTo=folderHandle.name;DB.put('recs',it).catch(()=>{});toast(`Saved to “${folderHandle.name}” ✔`);
+  }catch(e){toast('Auto-save failed: '+e.message)}
+}
+function renderFolder(){$('#folderLbl').innerHTML=folderHandle?`📁 <b style="color:var(--text)">${folderHandle.name}</b>`:'Not set'}
+$('#pickFolder').onclick=async()=>{
+  if(!window.showDirectoryPicker)return toast('Folder auto-save needs Chrome or Edge.');
+  try{folderHandle=await showDirectoryPicker({id:'litecast',mode:'readwrite',startIn:'videos'});await DB.put('kv',folderHandle,'folder').catch(()=>{});renderFolder();toast('Recordings will be saved to “'+folderHandle.name+'” automatically.')}catch{}
+};
+$('#clearFolder').onclick=async()=>{folderHandle=null;await DB.del('kv','folder').catch(()=>{});renderFolder()};
+
+/* ---------------- floating window (Document Picture-in-Picture) ---------------- */
+const PIPCSS=`*{box-sizing:border-box;margin:0}html,body{height:100%;background:#0e1015;font:13px "Segoe UI",system-ui;color:#fff;overflow:hidden}
+video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+body.circle video{inset:5%;width:90%;height:90%;border-radius:50%;border:3px solid #fff}
+body.rounded video{border-radius:14px}
+body.mirror video{transform:scaleX(-1)}
+.bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:5px;align-items:center;justify-content:center;padding:6px;background:linear-gradient(transparent,rgba(0,0,0,.85));transition:opacity .2s}
+body.cam.rec .bar{opacity:0}body:hover .bar{opacity:1!important}
+body.nocam .bar{top:0;background:#161920}
+button{border:0;border-radius:7px;padding:5px 8px;background:#2b3040;color:#fff;cursor:pointer;font-size:12.5px}
+button.r{background:#ff4d4f}.t{font-variant-numeric:tabular-nums;min-width:40px;font-weight:600}
+.dot{width:9px;height:9px;border-radius:50%;background:#666}body.rec .dot{background:#ff4d4f;animation:b 1s infinite}body.paused .dot{background:#f5a524;animation:none}
+@keyframes b{50%{opacity:.3}}
+#pcd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:60px;font-weight:800;background:rgba(0,0,0,.55)}
+.off{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#999}`;
+async function openPip(){
+  if(!('documentPictureInPicture' in window)){toast('The floating window needs Chrome or Edge version 116 or newer.');return}
+  if(pipWin){pipWin.focus();return}
+  const cam=needCam()&&!!camStream;
+  pipWin=await documentPictureInPicture.requestWindow(cam?{width:230,height:230}:{width:330,height:56});
+  pipWin.addEventListener('pagehide',()=>{pipWin=null;updateUi()});
+  buildPip();
+}
+function buildPip(){
+  if(!pipWin)return;const d=pipWin.document;const cam=needCam()&&!!camStream;
+  d.head.innerHTML=`<style>${PIPCSS}</style>`;d.title='LiteCast';
+  d.body.className=(cam?'cam ':'nocam ')+S.shape+(S.mirror?' mirror':'');
+  d.body.innerHTML=(cam?'<video id="pv" autoplay muted playsinline></video><div class="off" id="poff">camera hidden</div>':'')+
+   `<div class="bar"><span class="dot"></span><span class="t" id="pt">00:00</span><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${cam?'<button id="pcam">🎥</button>':''}</div><div id="pcd"></div>`;
+  if(cam){const v=d.getElementById('pv');v.srcObject=camStream;v.play().catch(()=>{})}
+  d.getElementById('prec').onclick=()=>rec.active?stopRec(true):startRec();
+  d.getElementById('ppause').onclick=togglePause;
+  d.getElementById('pmic').onclick=toggleMic;
+  const pc=d.getElementById('pcam');if(pc)pc.onclick=toggleCam;
+  updateUi();
+}
+
+/* ---------------- toggles ---------------- */
+function toggleMic(){micMuted=!micMuted;if(rec.micGain)rec.micGain.gain.value=micMuted?0:S.micGain;updateUi();toast(micMuted?'Microphone muted':'Microphone on',1500)}
+function toggleCam(){S.camVisible=!S.camVisible;updateUi()}
+
+/* ---------------- UI ---------------- */
+function updateUi(){
+  const t=fmtDur(elapsed());
+  $('#timer').textContent=t;
+  const secs=elapsed()/1000;
+  $('#liveSize').textContent=!rec.active?'0 KB':rec.bytes?fmtSize(rec.bytes):'≈ '+fmtSize(Math.round(mbPerMin()*1048576*secs/60));
+  $('#liveRate').textContent=rec.active&&secs>3&&rec.bytes?`≈ ${(rec.bytes/1048576/secs*60).toFixed(1)} MB per minute`:`target ≈ ${mbPerMin().toFixed(1)} MB/min`;
+  $('#recLbl').textContent=rec.active?'Stop':'Start recording';
+  $('#recBtn').querySelector('.d').style.borderRadius=rec.active?'2px':'50%';
+  $('#pauseBtn').disabled=!rec.active;$('#pauseBtn').textContent=rec.paused?'▶ Resume':'⏸ Pause';
+  const b=$('#badge');b.classList.toggle('show',rec.active);b.classList.toggle('paused',rec.paused);$('#badgeT').textContent=rec.paused?'PAUSED '+t:'REC '+t;
+  $('#camToggle').textContent=S.camVisible?'🎥 Camera on':'🚫 Camera hidden';$('#camToggle').disabled=!needCam();
+  $('#micToggle').textContent=micMuted?'🔇 Mic muted':'🎙 Mic on';$('#micToggle').classList.toggle('on',micMuted);
+  $('#pipBtn').classList.toggle('on',!!pipWin);
+  document.title=rec.active?(rec.paused?'⏸ ':'🔴 ')+t+' — LiteCast':'LiteCast — Lightweight Screen & Camera Recorder';
+  if(pipWin){const d=pipWin.document;d.body.classList.toggle('rec',rec.active);d.body.classList.toggle('paused',rec.paused);
+    const q=id=>d.getElementById(id);if(q('pt'))q('pt').textContent=t;if(q('prec'))q('prec').textContent=rec.active?'■ Stop':'● Rec';
+    if(q('ppause'))q('ppause').textContent=rec.paused?'▶':'⏸';if(q('pmic'))q('pmic').textContent=micMuted?'🔇':'🎙';
+    if(q('pv'))q('pv').style.visibility=S.camVisible?'visible':'hidden';if(q('poff'))q('poff').style.display=S.camVisible?'none':'flex'}
+}
+const mbPerMin=()=>(S.vk+(S.micOn||S.sysAudio?S.ak:0))*1000/8*60/1048576;
+function renderSettings(){
+  const segSet=(id,v)=>$$(id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  segSet('#segMode',S.mode);segSet('#segStyle',S.camStyle);segSet('#segShape',S.shape);segSet('#segPreset',S.preset);
+  $('#camCard').style.display=S.mode==='screen'?'none':'';
+  $('#segStyle').parentElement.querySelectorAll('#segStyle,#styleHint').forEach(e=>e.style.display=S.mode==='screencam'?'':'none');
+  $('#styleHint').innerHTML=S.camStyle==='overlay'?'Your face is drawn into the video. Works whether you share a window, a tab or the whole screen.':'Your face floats on the desktop (always on top) and you can see yourself. Choose <b>Entire screen</b> when sharing. Lowest CPU use.';
+  $('#camSize').value=S.camSize;$('#mirror').checked=S.mirror;$('#micOn').checked=S.micOn;$('#micGain').value=S.micGain;$('#noise').checked=S.noise;$('#sysAudio').checked=S.sysAudio;
+  $('#countdown').checked=S.countdown;$('#title').value=S.title;
+  const rv=S.w+'x'+S.h;if(![...$('#res').options].some(o=>o.value===rv))$('#res').insertAdjacentHTML('beforeend',`<option value="${rv}">${S.w}×${S.h}</option>`);$('#res').value=rv;
+  $('#fps').value=String(S.fps);$('#vk').value=S.vk;$('#vkv').textContent=S.vk;$('#ak').value=String(S.ak);
+  $('#fmt').value=S.format;
+  const m=mbPerMin();
+  $('#est').innerHTML=`Target size ≈ <b>${m.toFixed(1)} MB</b> per minute<br>45-min lecture ≈ <b>${(m*45).toFixed(0)} MB</b> · 10 min ≈ ${(m*10).toFixed(0)} MB<div class="hint" style="margin-top:4px">Slides and still screens usually come out smaller. For text-heavy screens prefer lower fps over lower resolution.</div>`;
+  idleSize();save();
+}
+function bindSeg(id,key,after){$$(id+' button').forEach(b=>b.onclick=()=>{if(rec.active&&id!=='#segShape')return;S[key]=b.dataset.v;after&&after();renderSettings()})}
+bindSeg('#segMode','mode',()=>{syncDevices();if(pipWin)buildPip()});
+bindSeg('#segStyle','camStyle');
+bindSeg('#segShape','shape',()=>pipWin&&buildPip());
+bindSeg('#segPreset','preset',()=>Object.assign(S,PRESETS[S.preset]));
+const custom=()=>{S.preset='custom';renderSettings()};
+$('#res').onchange=e=>{const[w,h]=e.target.value.split('x').map(Number);S.w=w;S.h=h;custom()};
+$('#fps').onchange=e=>{S.fps=+e.target.value;custom()};
+$('#vk').oninput=e=>{S.vk=+e.target.value;custom()};
+$('#ak').onchange=e=>{S.ak=+e.target.value;custom()};
+$('#fmt').onchange=e=>{S.format=e.target.value;renderSettings()};
+$('#camSize').oninput=e=>{S.camSize=+e.target.value;save()};
+$('#mirror').onchange=e=>{S.mirror=e.target.checked;save();pipWin&&buildPip()};
+$('#micOn').onchange=e=>{S.micOn=e.target.checked;renderSettings();syncDevices()};
+$('#micGain').oninput=e=>{S.micGain=+e.target.value;if(rec.micGain&&!micMuted)rec.micGain.gain.value=S.micGain;save()};
+$('#noise').onchange=e=>{S.noise=e.target.checked;save();if(micStream)startMic()};
+$('#sysAudio').onchange=e=>{S.sysAudio=e.target.checked;renderSettings()};
+$('#countdown').onchange=e=>{S.countdown=e.target.checked;save()};
+$('#title').oninput=e=>{S.title=e.target.value;save()};
+$('#camSel').onchange=e=>{S.camId=e.target.value;save();startCamera()};
+$('#micSel').onchange=e=>{S.micId=e.target.value;save();startMic()};
+$('#posGrid').innerHTML=[[.14,.2],[.5,.2],[.86,.2],[.14,.5],[.5,.5],[.86,.5],[.14,.8],[.5,.8],[.86,.8]].map(([x,y])=>`<button data-x="${x}" data-y="${y}"></button>`).join('');
+$$('#posGrid button').forEach(b=>b.onclick=()=>{S.camX=+b.dataset.x;S.camY=+b.dataset.y;S.camX=S.camX<.5?0:S.camX>.5?1:.5;S.camY=S.camY<.5?0:S.camY>.5?1:.5;save()});
+$('#fmt').innerHTML=Object.entries(FORMATS).map(([k,f])=>`<option value="${k}" ${supported(k)?'':'disabled'}>${f.label}${supported(k)?'':' (not supported here)'}</option>`).join('');
+if(!supported(S.format))S.format=['mp4','vp9','vp8'].find(supported)||'vp8';
+
+/* drag camera in preview */
+let drag=null;
+stage.addEventListener('pointerdown',e=>{
+  if(S.mode!=='screencam'||!camSrc)return;
+  const rc=stage.getBoundingClientRect(),x=(e.clientX-rc.left)/rc.width*stage.width,y=(e.clientY-rc.top)/rc.height*stage.height,r=camRect(stage.width,stage.height);
+  if(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h){drag={dx:x-(r.x+r.w/2),dy:y-(r.y+r.h/2)};stage.setPointerCapture(e.pointerId)}
+});
+stage.addEventListener('pointermove',e=>{
+  const rc=stage.getBoundingClientRect(),x=(e.clientX-rc.left)/rc.width*stage.width,y=(e.clientY-rc.top)/rc.height*stage.height;
+  if(drag){const W=stage.width,H=stage.height,r=camRect(W,H);const hw=r.w/2,hh=r.h/2,m=H*.025;
+    S.camX=Math.min(Math.max(x-drag.dx,hw+m),W-hw-m)/W;S.camY=Math.min(Math.max(y-drag.dy,hh+m),H-hh-m)/H;return}
+  if(S.mode==='screencam'&&camSrc){const r=camRect(stage.width,stage.height);stage.style.cursor=(x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h)?'grab':''}
+});
+stage.addEventListener('pointerup',()=>{if(drag){drag=null;save()}});
+stage.addEventListener('wheel',e=>{if(S.mode!=='screencam')return;e.preventDefault();S.camSize=Math.min(.5,Math.max(.14,S.camSize-e.deltaY*0.0005));$('#camSize').value=S.camSize;save()},{passive:false});
+
+$('#recBtn').onclick=()=>rec.active?stopRec(true):startRec();
+$('#pauseBtn').onclick=togglePause;
+$('#camToggle').onclick=toggleCam;$('#micToggle').onclick=toggleMic;
+$('#pipBtn').onclick=()=>pipWin?pipWin.close():openPip().catch(e=>toast(e.message));
+$('#enableBtn').onclick=async()=>{ensureAudio();
+  try{const s=await navigator.mediaDevices.getUserMedia({video:needCam(),audio:S.micOn});s.getTracks().forEach(t=>t.stop())}catch(e){toast('Permission was not granted: '+e.message)}
+  await syncDevices()};
+document.addEventListener('keydown',e=>{
+  if(!e.altKey)return;const k=e.key.toLowerCase();
+  if(k==='r'){e.preventDefault();rec.active?stopRec(true):startRec()}else if(k==='p'){e.preventDefault();togglePause()}
+  else if(k==='c'){e.preventDefault();toggleCam()}else if(k==='m'){e.preventDefault();toggleMic()}
+});
+window.addEventListener('beforeunload',e=>{if(rec.active){e.preventDefault();e.returnValue=''}});
+navigator.mediaDevices&&navigator.mediaDevices.addEventListener&&navigator.mediaDevices.addEventListener('devicechange',listDevices);
+
+/* ---------------- boot ---------------- */
+(async function boot(){
+  renderSettings();renderFolder();setTick(15);updateUi();
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){toast('Screen recording isn’t available here. Open this file in Google Chrome or Microsoft Edge on your laptop.',10000)}
+  try{recs=(await DB.all('recs')).sort((a,b)=>b.id-a.id)}catch(e){recs=[]}
+  renderLib();
+  try{folderHandle=await DB.get('kv','folder')||null;renderFolder()}catch{}
+  let camOk=false,micOk=false;
+  try{camOk=(await navigator.permissions.query({name:'camera'})).state==='granted'}catch{}
+  try{micOk=(await navigator.permissions.query({name:'microphone'})).state==='granted'}catch{}
+  if(needCam()&&camOk)await startCamera();
+  if(S.micOn&&micOk)await startMic();
+  await listDevices();refreshEnableOverlay();
+})();
+</script>
+</body>
+</html>
