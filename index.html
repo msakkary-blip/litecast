@@ -220,6 +220,7 @@ body.viewer > header, body.viewer .app{display:none}
       <option value="250">Low · 250 kbps (weak internet)</option><option value="400">Normal · 400 kbps</option>
       <option value="600">Good · 600 kbps</option><option value="900">High · 900 kbps</option></select></div>
     <div class="hint" id="upEst"></div>
+    <label class="chk"><input type="checkbox" id="allowRec"> Allow students to record the lecture</label>
     <details class="adv"><summary>Connection help for mobile-data students (relay server)</summary>
       <div class="hint">A free shared relay (PeerJS) is already used automatically. If some students on mobile data still cannot connect, add your own free relay: create a free account at <a href="https://www.metered.ca/tools/openrelay/" target="_blank">metered.ca Open Relay</a> (20 GB/month free) and paste the <i>TURN credentials API URL</i> from your dashboard here.</div>
       <div class="row"><label>Relay</label><select id="turnMode" class="grow"><option value="none">None (direct only)</option><option value="url">Metered / credentials URL</option><option value="custom">Custom TURN server</option></select></div>
@@ -315,6 +316,8 @@ body.viewer > header, body.viewer .app{display:none}
       <div class="chatlog" id="vChat"></div>
       <form class="chatform" id="vForm"><input type="text" id="vMsg" placeholder="Ask a question…" autocomplete="off"><button class="btn sm pri">Send</button></form>
       <button class="btn" id="vHand">✋ Raise hand</button>
+      <button class="btn" id="vRec">⏺ Record this lecture</button>
+      <div class="hint" id="vRecInfo" style="margin-top:0"></div>
     </div>
   </div>
 </div>
@@ -336,7 +339,7 @@ const PRESETS={
 };
 const S=Object.assign({mode:'screencam',camStyle:'overlay',shape:'circle',camSize:0.26,camX:0.86,camY:0.78,mirror:true,
   camId:'',micId:'',micOn:true,micGain:1,noise:true,sysAudio:true,preset:'small',w:1280,h:720,fps:12,vk:400,ak:48,
-  format:'mp4',countdown:true,title:'Lecture',camVisible:true,liveKbps:400,room:'',turnMode:'none',turnUrl:'',turnUrls:'',turnUser:'',turnPass:'',publicUrl:''},(()=>{try{return JSON.parse(localStorage.getItem('litecast')||'{}')}catch{return{}}})());
+  format:'mp4',countdown:true,title:'Lecture',camVisible:true,liveKbps:400,allowRec:true,room:'',turnMode:'none',turnUrl:'',turnUrls:'',turnUser:'',turnPass:'',publicUrl:''},(()=>{try{return JSON.parse(localStorage.getItem('litecast')||'{}')}catch{return{}}})());
 S.camVisible=true;
 const newRoomId=()=>'litecast-'+Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');
 if(!S.room)S.room=newRoomId();
@@ -826,7 +829,7 @@ function renderSettings(){
   const rv=S.w+'x'+S.h;if(![...$('#res').options].some(o=>o.value===rv))$('#res').insertAdjacentHTML('beforeend',`<option value="${rv}">${S.w}×${S.h}</option>`);$('#res').value=rv;
   $('#fps').value=String(S.fps);$('#vk').value=S.vk;$('#vkv').textContent=S.vk;$('#ak').value=String(S.ak);
   $('#fmt').value=S.format;
-  $('#room').value=S.room;$('#liveKbps').value=String(S.liveKbps);$('#turnMode').value=S.turnMode;$('#turnUrl').value=S.turnUrl;$('#turnUrls').value=S.turnUrls;$('#turnUser').value=S.turnUser;$('#turnPass').value=S.turnPass;$('#publicUrl').value=S.publicUrl;
+  $('#allowRec').checked=S.allowRec;$('#room').value=S.room;$('#liveKbps').value=String(S.liveKbps);$('#turnMode').value=S.turnMode;$('#turnUrl').value=S.turnUrl;$('#turnUrls').value=S.turnUrls;$('#turnUser').value=S.turnUser;$('#turnPass').value=S.turnPass;$('#publicUrl').value=S.publicUrl;
   $('#turnUrlRow').style.display=S.turnMode==='url'?'':'none';$('#turnCustom').style.display=S.turnMode==='custom'?'':'none';
   $('#upEst').innerHTML=`Your upload needed ≈ ${((S.liveKbps+40)/1000).toFixed(2)} Mbps per student · 8 students ≈ <b>${(8*(S.liveKbps+40)/1000).toFixed(1)} Mbps</b>`;
   const m=mbPerMin();
@@ -848,6 +851,7 @@ $('#room').onchange=e=>{const v=e.target.value.trim().replace(/[^A-Za-z0-9_-]/g,
 $('#newRoom').onclick=()=>{S.room=newRoomId();renderSettings();toast('New class link created.')};
 $('#liveKbps').onchange=e=>{S.liveKbps=+e.target.value;renderSettings();applyLiveBitrate();renderLive()};
 $('#turnMode').onchange=e=>{S.turnMode=e.target.value;renderSettings()};
+$('#allowRec').onchange=e=>{S.allowRec=e.target.checked;save();if(live.active)broadcast({t:'policy',rec:S.allowRec});toast(S.allowRec?'Students may record':'Student recording turned off',2000)};
 ['turnUrl','turnUrls','turnUser','turnPass','publicUrl'].forEach(k=>$('#'+k).onchange=e=>{S[k]=e.target.value.trim();renderSettings()});
 $('#camSize').oninput=e=>{S.camSize=+e.target.value;save()};
 $('#mirror').onchange=e=>{S.mirror=e.target.checked;save();pipWin&&buildPip()};
@@ -986,7 +990,7 @@ function onViewerConn(conn){
     const old=live.viewers.get(conn.peer);if(old)dropViewer(conn.peer,true);
     const v={id:conn.peer,name,conn,call:null,hand:false};
     live.viewers.set(conn.peer,v);
-    send(v,{t:'hello',title:S.title||'Live class',chat:live.chat.slice(-40)});
+    send(v,{t:'hello',title:S.title||'Live class',chat:live.chat.slice(-40),rec:S.allowRec});
     callViewer(v);
     sysChat(`${name} joined`);renderLive();
     if(live.viewers.size===MAX_SUGGESTED+1) toast(`${live.viewers.size} students now — if video gets choppy, lower “Quality / student”.`,6000);
@@ -1067,7 +1071,39 @@ function viewerMain(classId,iceParam){
   document.body.classList.add('viewer');document.title='LiteCast Live class';
   const vid=$('#vVid'),stat=(t,ok)=>{$('#vStatus').textContent=t;$('#vStatus').classList.toggle('ok',!!ok)};
   const msg=(t,play)=>{$('#vMsgTxt').textContent=t;$('#vPlay').style.display=play?'':'none';$('#vMsgOv').classList.toggle('show',!!t||!!play)};
-  let peer=null,conn=null,ended=false,retryT=null,hand=false,gotStream=false,name='';
+  let peer=null,conn=null,ended=false,retryT=null,hand=false,gotStream=false,name='',allowRec=true,vrec=null,lessonTitle='Lecture';
+  function updRec(){
+    $('#vRec').style.display=allowRec?'':'none';
+    $('#vRec').textContent=vrec?'⏹ Stop & save recording':'⏺ Record this lecture';$('#vRec').classList.toggle('on',!!vrec);
+    if(!allowRec&&!vrec)$('#vRecInfo').textContent='';
+  }
+  function startVRec(){
+    if(vrec)return;
+    if(!allowRec)return toast('The teacher has turned off recording.');
+    const st=vid.srcObject;if(!st||!gotStream)return toast('Wait until the video starts, then press Record.');
+    if(!window.MediaRecorder)return toast('This browser cannot record. Try Chrome or Edge.');
+    const mime=pickMime();const opts={videoBitsPerSecond:350000,audioBitsPerSecond:48000};if(mime)opts.mimeType=mime;
+    let mr;try{mr=new MediaRecorder(st,opts)}catch(e){delete opts.mimeType;try{mr=new MediaRecorder(st,opts)}catch(e2){return toast('Recording failed: '+e2.message)}}
+    vrec={mr,chunks:[],bytes:0,t0:performance.now(),mime:mr.mimeType||mime,timer:null};
+    mr.ondataavailable=e=>{if(e.data&&e.data.size){vrec.chunks.push(e.data);vrec.bytes+=e.data.size}};
+    mr.onstop=()=>saveVRec();
+    mr.start(1000);
+    vrec.timer=setInterval(()=>{if(!vrec)return;const ms=performance.now()-vrec.t0;$('#vRecInfo').innerHTML=`🔴 Recording ${fmtDur(ms)} · ${vrec.bytes?fmtSize(vrec.bytes):'≈ '+fmtSize(Math.round(398000/8*ms/1000))} — saved to your Downloads when you stop.`},500);
+    updRec();
+  }
+  function stopVRec(){if(vrec&&vrec.mr.state!=='inactive')vrec.mr.stop()}
+  async function saveVRec(){
+    const r=vrec;vrec=null;if(!r)return;clearInterval(r.timer);
+    const dur=performance.now()-r.t0;const type=(r.mime||'video/webm').split(';')[0];
+    let blob=new Blob(r.chunks,{type});
+    if(type.includes('webm')){try{blob=await fixWebmDuration(blob,dur)}catch{}}
+    const name=`${safeName(lessonTitle)}_${stamp()}.${type.includes('mp4')?'mp4':'webm'}`;
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
+    $('#vRecInfo').innerHTML=`✔ Saved <b>${name}</b> (${fmtDur(dur)}, ${fmtSize(blob.size)}) to your Downloads.`;
+    updRec();
+  }
+  $('#vRec').onclick=()=>vrec?stopVRec():startVRec();
+  window.addEventListener('beforeunload',e=>{if(vrec){e.preventDefault();e.returnValue=''}});
   try{$('#vName').value=localStorage.getItem('litecast-name')||''}catch{}
   const retry=(ms)=>{if(ended)return;clearTimeout(retryT);retryT=setTimeout(connect,ms)};
   async function join(){
@@ -1080,7 +1116,7 @@ function viewerMain(classId,iceParam){
     try{peer=await openPeer(null,ice)}catch(e){stat('Connection error');msg('Could not connect ('+(e.type||e.message)+'). Reload the page to try again.');return}
     peer.on('call',call=>{
       call.answer();
-      call.on('stream',st=>{gotStream=true;vid.srcObject=st;vid.muted=false;
+      call.on('stream',st=>{if(vrec&&vid.srcObject!==st){stopVRec();toast('Video reconnected — your recording so far was saved. Press Record to continue.',6000)}gotStream=true;vid.srcObject=st;vid.muted=false;
         vid.play().then(()=>msg('')).catch(()=>msg('',true));stat('● Live',true)});
       call.on('close',()=>{if(!ended){gotStream=false;stat('Video interrupted — reconnecting…')}});
     });
@@ -1098,10 +1134,11 @@ function viewerMain(classId,iceParam){
     conn.on('open',()=>{stat(gotStream?'● Live':'Connected — starting video…',gotStream);if(!gotStream)msg('Connected. Video is starting…')});
     conn.on('data',d=>{
       if(!d||typeof d!=='object')return;
-      if(d.t==='hello'){$('#vTitle').textContent=d.title||'Live class';document.title=(d.title||'Live class')+' — LiteCast Live';$('#vChat').innerHTML='';(d.chat||[]).forEach(m=>addChat('#vChat',m))}
+      if(d.t==='hello'){lessonTitle=d.title||'Lecture';allowRec=d.rec!==false;updRec();$('#vTitle').textContent=d.title||'Live class';document.title=(d.title||'Live class')+' — LiteCast Live';$('#vChat').innerHTML='';(d.chat||[]).forEach(m=>addChat('#vChat',m))}
       else if(d.t==='chat')addChat('#vChat',d);
       else if(d.t==='handdown'){hand=false;updHand()}
-      else if(d.t==='end'){ended=true;stat('Class ended');msg('The class has ended. Thank you for attending!');try{vid.srcObject=null}catch{};setTimeout(()=>{try{peer.destroy()}catch{}},500)}
+      else if(d.t==='policy'){allowRec=!!d.rec;if(!allowRec&&vrec){stopVRec();toast('The teacher turned off recording — your recording so far was saved.',6000)}updRec()}
+      else if(d.t==='end'){ended=true;if(vrec)stopVRec();stat('Class ended');msg('The class has ended. Thank you for attending!');try{vid.srcObject=null}catch{};setTimeout(()=>{try{peer.destroy()}catch{}},500)}
     });
     conn.on('close',()=>{if(!ended){stat('Disconnected — reconnecting…');gotStream=false;retry(3000)}});
     // if no video arrives within 12 s, ask the teacher to send it again
