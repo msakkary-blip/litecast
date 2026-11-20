@@ -98,6 +98,9 @@ input[type=range]{width:100%;accent-color:var(--acc)}
 #hid{position:fixed;left:-9999px;top:0;width:4px;height:4px;overflow:hidden}
 aside.locked .lockable{opacity:.5;pointer-events:none}
 a{color:#8fb4ff}
+html.native .kbd,html.native #pipBtn,html.native .desk-only{display:none!important}
+.apkbar{display:none;background:#14321f;border-bottom:1px solid #1f5c38;padding:8px 14px;font-size:13px;text-align:center}
+.apkbar.show{display:block}
 @media(max-width:900px){.app{grid-template-columns:1fr;height:auto}aside{border-right:0}}
 
 .btn.live{background:#0f7b4f;border-color:#0f7b4f;color:#fff;font-weight:600}
@@ -135,10 +138,12 @@ body.viewer > header, body.viewer .app{display:none}
 </style>
 </head>
 <body>
+<div class="apkbar" id="apkBar">📱 Teaching from an Android phone? <a href="https://github.com/msakkary-blip/litecast/releases/download/android-latest/LiteCast.apk">Install the LiteCast Android app</a> — it can share your phone screen.</div>
 <header>
   <div class="logo"></div>
   <div><h1>LiteCast Recorder</h1><div class="sub">Small-file screen + camera recordings for online teaching</div></div>
   <div class="sp"></div>
+  <button class="btn sm" id="joinBtn" style="display:none">🎓 Join a class</button>
   <div class="kbd"><b>Alt</b>+<b>R</b> start/stop &nbsp; <b>Alt</b>+<b>P</b> pause &nbsp; <b>Alt</b>+<b>C</b> camera &nbsp; <b>Alt</b>+<b>M</b> mic &nbsp; <b>Alt</b>+<b>L</b> live</div>
 </header>
 
@@ -181,8 +186,8 @@ body.viewer > header, body.viewer .app{display:none}
     <div class="row"><label>Level</label><div class="meter grow"><i id="meter"></i></div></div>
     <div class="row"><label>Mic volume</label><input type="range" id="micGain" min="0" max="2" step="0.05" class="grow"></div>
     <label class="chk lockable"><input type="checkbox" id="noise"> Noise &amp; echo reduction</label>
-    <label class="chk lockable"><input type="checkbox" id="sysAudio"> Computer sound (videos, apps)</label>
-    <div class="hint">For computer sound, tick <i>“Also share system audio”</i> in the browser’s share dialog.</div>
+    <label class="chk lockable desk-only"><input type="checkbox" id="sysAudio"> Computer sound (videos, apps)</label>
+    <div class="hint desk-only">For computer sound, tick <i>“Also share system audio”</i> in the browser’s share dialog.</div>
   </div>
 
   <div class="card lockable">
@@ -206,9 +211,9 @@ body.viewer > header, body.viewer .app{display:none}
   <div class="card">
     <h3><span class="n">5</span>Saving</h3>
     <div class="row"><label>File name</label><input type="text" id="title" class="grow" placeholder="e.g. Econometrics L5 – Panel data"></div>
-    <div class="row"><label>Auto-save</label><div class="grow" id="folderLbl" style="font-size:12.5px;color:var(--mut)">Not set</div></div>
-    <div class="row"><button class="btn sm" id="pickFolder">Choose folder…</button><button class="btn sm" id="clearFolder">Clear</button></div>
-    <div class="hint">Tip: choose your <b>Google Drive</b> folder (Google Drive for desktop, e.g. <i>G:\My Drive\Lectures</i>) and every recording uploads itself automatically.</div>
+    <div class="row desk-only"><label>Auto-save</label><div class="grow" id="folderLbl" style="font-size:12.5px;color:var(--mut)">Not set</div></div>
+    <div class="row desk-only"><button class="btn sm" id="pickFolder">Choose folder…</button><button class="btn sm" id="clearFolder">Clear</button></div>
+    <div class="hint desk-only">Tip: choose your <b>Google Drive</b> folder (Google Drive for desktop, e.g. <i>G:\My Drive\Lectures</i>) and every recording uploads itself automatically.</div>
     <label class="chk lockable"><input type="checkbox" id="countdown"> 3-second countdown before recording</label>
   </div>
   <div class="card">
@@ -264,7 +269,7 @@ body.viewer > header, body.viewer .app{display:none}
     <div class="lp">
       <h4><span class="dot"></span>Live now · <span id="liveCount">0 students</span> · <span id="liveTime">00:00</span></h4>
       <div class="linkbox"><input type="text" id="liveLink" readonly><button class="btn sm pri" id="copyLink">Copy</button></div>
-      <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="liveWa">💬 Send on WhatsApp</button><button class="btn sm" id="liveMail">✉ Email link</button><button class="btn sm" id="liveOpen">👁 Preview as student</button></div>
+      <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="liveWa">💬 Send on WhatsApp</button><button class="btn sm" id="liveMail">✉ Email link</button><button class="btn sm desk-only" id="liveOpen">👁 Preview as student</button></div>
       <div class="students" id="students"></div>
       <div class="hint" id="liveWarn"></div>
     </div>
@@ -309,6 +314,7 @@ body.viewer > header, body.viewer .app{display:none}
         <input type="text" id="vName" placeholder="Your name" maxlength="40" style="max-width:280px;text-align:center">
         <button class="btn pri" id="vJoinBtn">Join class</button>
         <div class="hint">Works in Chrome, Edge, Safari and Firefox — on phone or computer.</div>
+        <div class="hint" id="vApk" style="display:none">On Android you can also use the <a href="https://github.com/msakkary-blip/litecast/releases/download/android-latest/LiteCast.apk">LiteCast app</a>.</div>
       </div>
       <div class="ov" id="vMsgOv"><div id="vMsgTxt" style="font-size:16px"></div><button class="btn pri" id="vPlay" style="display:none">▶ Tap to start video &amp; sound</button></div>
     </div>
@@ -386,6 +392,51 @@ class FrameSrc{
   stop(){this.alive=false;try{this.reader&&this.reader.cancel()}catch{}if(this.frame){this.frame.close();this.frame=null}if(this.clone)this.clone.stop();if(this.vid){this.vid.srcObject=null;this.vid.remove()}}
 }
 
+
+/* ---------------- Android app bridge (only active inside the LiteCast Android app) ---------------- */
+const NATIVE=window.LiteCastNative||null;
+const IS_ANDROID_WEB=!NATIVE&&/Android/i.test(navigator.userAgent);
+const APK_URL='https://github.com/msakkary-blip/litecast/releases/download/android-latest/LiteCast.apk';
+const nativeWait={};
+window.__litecastNative=(evt,data)=>{
+  if(evt==='screen'&&nativeWait.screen){const r=nativeWait.screen;nativeWait.screen=null;r(data)}
+  else if(evt==='stopped'){if(cap.active)onCaptureEnded()}
+};
+function nativeStartScreen(){
+  return new Promise(res=>{
+    nativeWait.screen=v=>res(v==='started');
+    try{NATIVE.startScreen(S.w,S.h,S.fps,S.mode==='screencam',S.shape,!!S.mirror)}catch(e){nativeWait.screen=null;res(false)}
+  });
+}
+class NativeScreenSrc{
+  constructor(){this.bmp=null;this.busy=false;this.alive=true}
+  poll(){
+    if(!this.alive||this.busy)return;let s='';
+    try{s=NATIVE.frame()}catch(e){return}
+    if(!s)return;this.busy=true;
+    fetch('data:image/jpeg;base64,'+s).then(r=>r.blob()).then(b=>createImageBitmap(b)).then(bm=>{if(!this.alive){bm.close();return}if(this.bmp)this.bmp.close();this.bmp=bm}).catch(()=>{}).finally(()=>{this.busy=false});
+  }
+  get w(){return this.bmp?this.bmp.width:0}
+  get h(){return this.bmp?this.bmp.height:0}
+  get img(){return this.bmp}
+  stop(){this.alive=false;if(this.bmp){this.bmp.close();this.bmp=null}}
+}
+function blobToB64(b){return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]||'');r.onerror=()=>rej(r.error);r.readAsDataURL(b)})}
+async function nativeSave(blob,name){
+  const id=NATIVE.saveBegin(name,blob.type||'video/mp4');if(!id)throw new Error('Could not create the file in Downloads');
+  const CH=512*1024;
+  for(let o=0;o<blob.size;o+=CH){if(!NATIVE.saveChunk(id,await blobToB64(blob.slice(o,o+CH))))throw new Error('Writing the file failed')}
+  return NATIVE.saveEnd(id);
+}
+async function nativeShare(it,text){
+  try{if(!it.nativeUri){it.nativeUri=await nativeSave(it.blob,it.name);it.savedTo='Downloads/LiteCast';DB.put('recs',it).catch(()=>{})}
+    NATIVE.share(it.nativeUri,it.mime,text||it.name)}catch(e){toast('Sharing failed: '+e.message)}
+}
+if(NATIVE){
+  window.open=(u)=>{try{NATIVE.openUrl(new URL(u,location.href).href)}catch(e){}return null};
+  document.documentElement.classList.add('native');
+}
+
 /* ---------------- state ---------------- */
 let camStream=null,micStream=null,displayStream=null,camSrc=null,scrSrc=null,audioCtx=null,analyser=null,meterBuf=null,micMuted=false;
 const rec={active:false,paused:false,mr:null,chunks:[],bytes:0,t0:0,acc:0,mime:''};
@@ -449,6 +500,7 @@ function draw(){
 /* ---------------- tick ---------------- */
 let lastUi=0;
 function onTick(){
+  if(scrSrc&&scrSrc.poll)scrSrc.poll();
   if(!document.hidden||cap.active) draw();
   if(cap.active&&!cap.direct&&cap.vtrack&&cap.vtrack.requestFrame&&!(rec.active&&rec.paused&&!live.active)) cap.vtrack.requestFrame();
   const n=performance.now();
@@ -489,7 +541,7 @@ async function startMic(){
 }
 function stopMic(){analyser=null;if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null}}
 function ensureAudio(){if(!audioCtx)audioCtx=new AudioContext();if(audioCtx.state!=='running')audioCtx.resume().catch(()=>{})}
-const needCam=()=>S.mode!=='screen';
+const needCam=()=>S.mode==='cam'||(S.mode==='screencam'&&!NATIVE);
 async function syncDevices(){
   if(needCam()&&!camStream) await startCamera();
   if(!needCam()&&camStream) stopCamera();
@@ -512,11 +564,15 @@ function idleSize(){
 async function startCapture(){
   if(cap.active) return true;
   const screenNeeded=S.mode!=='cam';
-  const bubble=S.mode==='screencam'&&S.camStyle==='bubble';
+  const bubble=S.mode==='screencam'&&S.camStyle==='bubble'&&!NATIVE;
   if(needCam()&&!camStream) await startCamera();
   if(S.micOn&&!micStream) await startMic();
-  if(bubble&&!pipWin){try{await openPip()}catch(e){}}
-  if(screenNeeded){
+  if(bubble&&!pipWin&&!NATIVE){try{await openPip()}catch(e){}}
+  if(screenNeeded&&NATIVE){
+    if(!(await nativeStartScreen())){toast('Screen sharing was cancelled.');return false}
+    scrSrc=new NativeScreenSrc();
+    for(let i=0;i<40&&!scrSrc.w;i++){scrSrc.poll();await sleep(100)}
+  }else if(screenNeeded){
     try{
       const v={width:{max:S.w},height:{max:S.h},frameRate:{ideal:S.fps,max:S.fps}};
       if(bubble) v.displaySurface='monitor';
@@ -566,6 +622,7 @@ function stopCapture(){
   cap.active=false;
   if(scrSrc){scrSrc.stop();scrSrc=null}
   if(displayStream){displayStream.getTracks().forEach(t=>t.stop());displayStream=null}
+  if(NATIVE){try{NATIVE.stopScreen()}catch(e){}}
   cap.extra.forEach(n=>{try{n.disconnect()}catch{}});cap.extra=[];cap.micGain=null;
   if(cap.vtrack&&!cap.direct)cap.vtrack.stop();
   if(cap.stream)cap.stream.getAudioTracks().forEach(t=>t.stop());
@@ -580,7 +637,8 @@ function onCaptureEnded(){
 function waitDims(src){return new Promise(async r=>{for(let i=0;i<60;i++){if(src&&src.w)return r();await sleep(50)}r()})}
 function sizeStage(sw,sh){
   if(!sw||!sh){sw=S.w;sh=S.h}
-  const sc=Math.min(S.w/sw,S.h/sh,1);
+  const big=Math.max(S.w,S.h),small=Math.min(S.w,S.h),bw=sh>sw?small:big,bh=sh>sw?big:small;
+  const sc=Math.min(bw/sw,bh/sh,1);
   stage.width=even(sw*sc);stage.height=even(sh*sc);
 }
 
@@ -636,6 +694,7 @@ async function finalize(){
   recs.unshift(item);try{await DB.put('recs',item)}catch(e){toast('Could not store in browser library: '+e.message)}
   renderLib();updateUi();
   if(folderHandle) await saveToFolder(item,true);
+  if(NATIVE){try{item.nativeUri=await nativeSave(item.blob,item.name);item.savedTo='Downloads/LiteCast';DB.put('recs',item).catch(()=>{});toast('Saved to Downloads/LiteCast ✔')}catch(e){toast('Could not save to Downloads: '+e.message)}}
   if(!live.active) openResult(item); else toast(`Recording saved (${fmtSize(item.size)}) — find it under <b>My recordings</b>.`,5000);
 }
 
@@ -691,30 +750,30 @@ $('#grid').addEventListener('click',async e=>{
 });
 
 /* ---------------- sharing ---------------- */
-function download(it){const a=document.createElement('a');a.href=urlOf(it);a.download=it.name;document.body.appendChild(a);a.click();a.remove()}
-async function saveAs(it){
+function download(it){if(NATIVE){if(it.nativeUri)toast('Already saved in Downloads/LiteCast ✔');else nativeSave(it.blob,it.name).then(u=>{it.nativeUri=u;it.savedTo='Downloads/LiteCast';DB.put('recs',it).catch(()=>{});toast('Saved to Downloads/LiteCast ✔')}).catch(e=>toast(e.message));return}const a=document.createElement('a');a.href=urlOf(it);a.download=it.name;document.body.appendChild(a);a.click();a.remove()}
+async function saveAs(it){if(NATIVE)return download(it);
   if(!window.showSaveFilePicker){download(it);return}
   try{const ext=it.name.split('.').pop();const h=await showSaveFilePicker({suggestedName:it.name,startIn:'videos',types:[{description:'Video',accept:{[it.mime]:['.'+ext]}}]});const w=await h.createWritable();await w.write(it.blob);await w.close();toast('Saved ✔')}
   catch(e){if(e.name!=='AbortError')download(it)}
 }
 const fileOf=it=>new File([it.blob],it.name,{type:it.mime});
-async function shareSys(it){
+async function shareSys(it){if(NATIVE)return nativeShare(it);
   const f=fileOf(it);
   if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f],title:it.name});}catch(e){if(e.name!=='AbortError')toast('Sharing failed: '+e.message)}}
   else{download(it);toast('System sharing isn’t available here — the file was downloaded instead.')}
 }
-async function toDrive(it){
+async function toDrive(it){if(NATIVE)return nativeShare(it,'Lecture recording: '+it.name);
   if(folderHandle&&it.savedTo){toast(`Already saved to “${it.savedTo}”. If that’s your Google Drive folder it is syncing now.`);return}
   download(it);window.open('https://drive.google.com/drive/my-drive','_blank');
   toast('File downloaded — drag it from your <b>Downloads</b> into the Google Drive tab, then use <b>Share → Copy link</b>.<br>Tip: set your Google Drive folder as the <b>Auto-save</b> folder to skip this step.',8000);
 }
-async function toWhatsApp(it){
+async function toWhatsApp(it){if(NATIVE)return nativeShare(it,'Lecture recording: '+it.name);
   const f=fileOf(it);
   if(navigator.canShare&&navigator.canShare({files:[f]})&&confirm('Use the Windows share menu (pick WhatsApp)?\n\nOK = Share menu   ·   Cancel = WhatsApp Web')){try{await navigator.share({files:[f],title:it.name});return}catch(e){if(e.name==='AbortError')return}}
   download(it);window.open('https://web.whatsapp.com/','_blank');
   toast('File downloaded — in WhatsApp open the chat, click <b>📎 → Document</b> (keeps quality, up to 2 GB) or <b>Photos &amp; videos</b>, and pick the file.',8000);
 }
-async function toMail(it){
+async function toMail(it){if(NATIVE)return nativeShare(it,'Please find the recorded lesson attached: '+it.name);
   const MB=it.size/1048576;
   download(it);
   const body=`Hello,\n\nPlease find the recorded lesson "${it.name}" (${fmtDur(it.dur)}, ${fmtSize(it.size)}) attached.\n\nBest regards`;
@@ -793,7 +852,7 @@ function buildPip(){
 
 /* ---------------- toggles ---------------- */
 function toggleMic(){micMuted=!micMuted;if(cap.micGain)cap.micGain.gain.value=micMuted?0:S.micGain;updateUi();toast(micMuted?'Microphone muted':'Microphone on',1500)}
-function toggleCam(){S.camVisible=!S.camVisible;updateUi()}
+function toggleCam(){S.camVisible=!S.camVisible;if(NATIVE){try{NATIVE.bubbleVisible(S.camVisible)}catch(e){}}updateUi()}
 
 /* ---------------- UI ---------------- */
 function updateUi(){
@@ -823,6 +882,7 @@ function renderSettings(){
   segSet('#segMode',S.mode);segSet('#segStyle',S.camStyle);segSet('#segShape',S.shape);segSet('#segPreset',S.preset);
   $('#camCard').style.display=S.mode==='screen'?'none':'';
   $('#segStyle').parentElement.querySelectorAll('#segStyle,#styleHint').forEach(e=>e.style.display=S.mode==='screencam'?'':'none');
+  if(NATIVE){$('#segStyle').style.display='none';$('#styleHint').innerHTML='On Android your face appears in a <b>floating bubble</b> over any app (drag it anywhere, tap it to change size), and it is recorded with your screen.'}else
   $('#styleHint').innerHTML=S.camStyle==='overlay'?'Your face is drawn into the video. Works whether you share a window, a tab or the whole screen.':'Your face floats on the desktop (always on top) and you can see yourself. Choose <b>Entire screen</b> when sharing. Lowest CPU use.';
   $('#camSize').value=S.camSize;$('#mirror').checked=S.mirror;$('#micOn').checked=S.micOn;$('#micGain').value=S.micGain;$('#noise').checked=S.noise;$('#sysAudio').checked=S.sysAudio;
   $('#countdown').checked=S.countdown;$('#title').value=S.title;
@@ -896,6 +956,11 @@ document.addEventListener('keydown',e=>{
   if(k==='r'){e.preventDefault();rec.active?stopRec(true):startRec()}else if(k==='p'){e.preventDefault();togglePause()}
   else if(k==='c'){e.preventDefault();toggleCam()}else if(k==='l'){e.preventDefault();$('#liveBtn').click()}else if(k==='m'){e.preventDefault();toggleMic()}
 });
+$('#joinBtn').onclick=()=>{
+  const v=prompt('Paste the class link (or the class ID) your teacher sent:');if(!v)return;
+  let u;try{u=new URL(v.trim())}catch(e){u=new URL(baseUrl());u.search='';u.searchParams.set('class',v.trim())}
+  location.href=u.href;
+};
 window.addEventListener('beforeunload',e=>{if(rec.active||live.active){e.preventDefault();e.returnValue=''}});
 navigator.mediaDevices&&navigator.mediaDevices.addEventListener&&navigator.mediaDevices.addEventListener('devicechange',listDevices);
 
@@ -1068,6 +1133,7 @@ $('#liveOpen').onclick=()=>window.open($('#liveLink').value,'_blank');
 
 /* ---------- student viewer ---------- */
 function viewerMain(classId,iceParam){
+  if(IS_ANDROID_WEB)$('#vApk').style.display='';
   document.body.classList.add('viewer');document.title='LiteCast Live class';
   const vid=$('#vVid'),stat=(t,ok)=>{$('#vStatus').textContent=t;$('#vStatus').classList.toggle('ok',!!ok)};
   const msg=(t,play)=>{$('#vMsgTxt').textContent=t;$('#vPlay').style.display=play?'':'none';$('#vMsgOv').classList.toggle('show',!!t||!!play)};
@@ -1098,8 +1164,13 @@ function viewerMain(classId,iceParam){
     let blob=new Blob(r.chunks,{type});
     if(type.includes('webm')){try{blob=await fixWebmDuration(blob,dur)}catch{}}
     const name=`${safeName(lessonTitle)}_${stamp()}.${type.includes('mp4')?'mp4':'webm'}`;
+    if(NATIVE){
+      try{const uri=await nativeSave(blob,name);$('#vRecInfo').innerHTML=`✔ Saved <b>${name}</b> (${fmtDur(dur)}, ${fmtSize(blob.size)}) in Downloads/LiteCast. <a href="#" id="vShareRec">Share…</a>`;
+        $('#vShareRec').onclick=e=>{e.preventDefault();NATIVE.share(uri,type,name)}}
+      catch(e){$('#vRecInfo').textContent='Saving failed: '+e.message}
+    }else{
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();
-    $('#vRecInfo').innerHTML=`✔ Saved <b>${name}</b> (${fmtDur(dur)}, ${fmtSize(blob.size)}) to your Downloads.`;
+    $('#vRecInfo').innerHTML=`✔ Saved <b>${name}</b> (${fmtDur(dur)}, ${fmtSize(blob.size)}) to your Downloads.`;}
     updRec();
   }
   $('#vRec').onclick=()=>vrec?stopVRec():startVRec();
@@ -1156,6 +1227,8 @@ function viewerMain(classId,iceParam){
 
 /* ---------------- boot ---------------- */
 async function boot(){
+  if(NATIVE){S.sysAudio=false;$('#joinBtn').style.display='';}
+  if(IS_ANDROID_WEB)$('#apkBar').classList.add('show');
   renderSettings();renderFolder();setTick(15);updateUi();
   if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){toast('Screen recording isn’t available here. Open this file in Google Chrome or Microsoft Edge on your laptop.',10000)}
   try{recs=(await DB.all('recs')).sort((a,b)=>b.id-a.id)}catch(e){recs=[]}
