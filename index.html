@@ -124,6 +124,10 @@ html.native .kbd,html.native #pipBtn,html.native .desk-only{display:none!importa
 .students span.talk{border-color:var(--ok);color:#7fe0aa}
 .students span .mini{border:0;background:#2b3040;color:var(--text);border-radius:6px;padding:1px 6px;font-size:11.5px;cursor:pointer}
 .students span .mini:hover{background:#3a4156}
+.waitbox{margin-top:8px}
+.waitbox .it{display:flex;align-items:center;gap:6px;padding:6px 9px;border-radius:9px;background:rgba(79,140,255,.1);border:1px solid rgba(79,140,255,.4);margin-bottom:5px}
+.waitbox .it .nm{flex:1}
+.waitbox .hd{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);margin-bottom:5px}
 .stuscreen{display:none;margin-top:10px}
 .stuscreen.show{display:block}
 .stuscreen video{width:100%;max-height:300px;background:#000;border-radius:8px;border:1px solid var(--line)}
@@ -236,6 +240,8 @@ body.viewer > header, body.viewer .app{display:none}
       <option value="600">Good · 600 kbps</option><option value="900">High · 900 kbps</option></select></div>
     <div class="hint" id="upEst"></div>
     <label class="chk"><input type="checkbox" id="allowRec"> Allow students to record the lecture</label>
+    <label class="chk"><input type="checkbox" id="admitManual"> Students wait until I admit them (waiting room)</label>
+    <label class="chk"><input type="checkbox" id="chime"> Soft sound when a student waits or raises a hand</label>
     <label class="chk"><input type="checkbox" id="micFree"> Students can unmute without asking</label>
     <div class="hint">When off, students tap ✋ and you give them the mic with 🎙 next to their name. Use headphones if students' voices echo.</div>
     <details class="adv"><summary>Connection help for mobile-data students (relay server)</summary>
@@ -273,7 +279,7 @@ body.viewer > header, body.viewer .app{display:none}
     <div class="sp"></div>
     <button class="btn sm" id="camToggle" title="Show / hide your face (Alt+C)">🎥 Camera on</button>
     <button class="btn sm" id="micToggle" title="Mute / unmute (Alt+M)">🎙 Mic on</button>
-    <button class="btn sm" id="pipBtn" title="Always-on-top camera bubble / mini controls">⧉ Floating window</button>
+    <button class="btn sm" id="pipBtn" title="Always-on-top panel over other apps">⧉ Floating panel</button>
     <button class="btn live" id="liveBtn" title="Teach live — students join with a link (Alt+L)">📡 Go live</button>
   </div>
 
@@ -282,7 +288,8 @@ body.viewer > header, body.viewer .app{display:none}
       <h4><span class="dot"></span>Live now · <span id="liveCount">0 students</span> · <span id="liveTime">00:00</span></h4>
       <div class="linkbox"><input type="text" id="liveLink" readonly><button class="btn sm pri" id="copyLink">Copy</button></div>
       <div class="row" style="flex-wrap:wrap"><button class="btn sm" id="liveWa">💬 Send on WhatsApp</button><button class="btn sm" id="liveMail">✉ Email link</button><button class="btn sm desk-only" id="liveOpen">👁 Preview as student</button></div>
-      <div class="row" style="margin-top:6px"><button class="btn sm" id="muteAll">🔇 Mute all students</button><span class="hint" style="margin:0" id="talkInfo"></span></div>
+      <div id="waitBox" class="waitbox"></div>
+      <div class="row" style="margin-top:6px;flex-wrap:wrap"><button class="btn sm" id="muteAll">🔇 Mute all</button><button class="btn sm" id="lockBtn">🔓 Class open</button><button class="btn sm" id="attBtn">⬇ Attendance</button><button class="btn sm pri" id="panelBtn">⧉ Floating class panel</button><span class="hint" style="margin:0" id="talkInfo"></span></div>
       <div class="students" id="students"></div>
       <div class="stuscreen" id="stuScreen">
         <div class="row" style="margin-top:0"><b id="stuScreenName" style="flex:1">Student screen</b>
@@ -365,7 +372,7 @@ const PRESETS={
 };
 const S=Object.assign({mode:'screencam',camStyle:'overlay',shape:'circle',camSize:0.26,camX:0.86,camY:0.78,mirror:true,
   camId:'',micId:'',micOn:true,micGain:1,noise:true,sysAudio:true,preset:'small',w:1280,h:720,fps:12,vk:400,ak:48,
-  format:'mp4',countdown:true,title:'Lecture',camVisible:true,liveKbps:400,allowRec:true,micFree:true,room:'',turnMode:'none',turnUrl:'',turnUrls:'',turnUser:'',turnPass:'',publicUrl:''},(()=>{try{return JSON.parse(localStorage.getItem('litecast')||'{}')}catch{return{}}})());
+  format:'mp4',countdown:true,title:'Lecture',camVisible:true,liveKbps:400,allowRec:true,micFree:true,admitManual:true,chime:true,room:'',turnMode:'none',turnUrl:'',turnUrls:'',turnUser:'',turnPass:'',publicUrl:''},(()=>{try{return JSON.parse(localStorage.getItem('litecast')||'{}')}catch{return{}}})());
 S.camVisible=true;
 const newRoomId=()=>'litecast-'+Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('');
 if(!S.room)S.room=newRoomId();
@@ -461,7 +468,7 @@ if(NATIVE){
 let camStream=null,micStream=null,displayStream=null,camSrc=null,scrSrc=null,audioCtx=null,analyser=null,meterBuf=null,micMuted=false;
 const rec={active:false,paused:false,mr:null,chunks:[],bytes:0,t0:0,acc:0,mime:''};
 const cap={active:false,direct:false,vtrack:null,stream:null,micGain:null,extra:[],W:0,H:0};
-const live={active:false,peer:null,viewers:new Map(),chat:[],t0:0};
+const live={active:false,peer:null,viewers:new Map(),waiting:new Map(),admitted:new Set(),blocked:new Set(),locked:false,att:new Map(),chat:[],t0:0,compact:false};
 const elapsed=()=>rec.active?rec.acc+(rec.paused?0:performance.now()-rec.t0):0;
 let pipWin=null;
 
@@ -841,36 +848,114 @@ const PIPCSS=`*{box-sizing:border-box;margin:0}html,body{height:100%;background:
 video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 body.circle video{inset:5%;width:90%;height:90%;border-radius:50%;border:3px solid #fff}
 body.rounded video{border-radius:14px}
-body.mirror video{transform:scaleX(-1)}
+body.mirror video.pcam,body.mirror #pv{transform:scaleX(-1)}
 .bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:5px;align-items:center;justify-content:center;padding:6px;background:linear-gradient(transparent,rgba(0,0,0,.85));transition:opacity .2s}
 body.cam.rec .bar{opacity:0}body:hover .bar{opacity:1!important}
 body.nocam .bar{top:0;background:#161920}
 button{border:0;border-radius:7px;padding:5px 8px;background:#2b3040;color:#fff;cursor:pointer;font-size:12.5px}
+button:hover{background:#3a4156}
 button.r{background:#ff4d4f}.t{font-variant-numeric:tabular-nums;min-width:40px;font-weight:600}
-.dot{width:9px;height:9px;border-radius:50%;background:#666}body.rec .dot{background:#ff4d4f;animation:b 1s infinite}body.paused .dot{background:#f5a524;animation:none}
+button.g{background:#0f7b4f}button.on{outline:2px solid #4f8cff}
+.dot{width:9px;height:9px;border-radius:50%;background:#666;flex:none}body.rec .dot{background:#ff4d4f;animation:b 1s infinite}body.paused .dot{background:#f5a524;animation:none}
 @keyframes b{50%{opacity:.3}}
-#pcd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:60px;font-weight:800;background:rgba(0,0,0,.55)}
-.off{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#999}`;
+#pcd{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:60px;font-weight:800;background:rgba(0,0,0,.55);z-index:9}
+.off{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#999}
+/* ---- class panel ---- */
+body.panel{display:flex;flex-direction:column;overflow:hidden}
+body.panel .ph{display:flex;gap:10px;align-items:center;padding:8px 10px;background:#161920;border-bottom:1px solid #2a2f3b;flex:none}
+body.panel video.pcam{position:static;width:64px;height:64px;flex:none;border-radius:50%;border:2px solid #fff;inset:auto}
+body.panel.rounded video.pcam{border-radius:12px}body.panel.square video.pcam{border-radius:4px}
+.phx{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.prow{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+.pill{background:#b42318;border-radius:20px;padding:2px 8px;font-size:11.5px;font-weight:600}
+.pill.off2{background:#2b3040}
+.pbody{flex:1;overflow:auto;padding:8px 10px;display:flex;flex-direction:column;gap:10px}
+body.compact .pbody{display:none}
+.sec .sh{font-size:11px;letter-spacing:.7px;text-transform:uppercase;color:#97a0b1;margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.sec .sh .sp{flex:1}
+.it{display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:8px;background:#1d212b;margin-bottom:4px;border:1px solid #2a2f3b}
+.it .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.it.hand{border-color:#f5a524}.it.talk{border-color:#2fbf71}.it.wait{border-color:#4f8cff}
+.it button{padding:3px 7px;font-size:12px}
+.empty{color:#6b7486;font-size:12px}
+#psv{position:static;width:100%;height:auto;max-height:200px;background:#000;border-radius:8px;object-fit:contain;inset:auto}
+.pchat{max-height:150px;overflow:auto;background:#1d212b;border-radius:8px;padding:6px;font-size:12.5px;border:1px solid #2a2f3b}
+.pchat div{margin-bottom:3px}.pchat b{color:#9fc0ff}.pchat .sys{color:#97a0b1;font-style:italic}
+#pform{display:flex;gap:5px;margin-top:5px}#pform input{flex:1;min-width:0;background:#1d212b;border:1px solid #2a2f3b;border-radius:7px;color:#fff;padding:5px 7px;font:inherit}
+.badge{background:#f5a524;color:#000;border-radius:10px;padding:0 6px;font-size:11px;font-weight:700}`;
 async function openPip(){
-  if(!('documentPictureInPicture' in window)){toast('The floating window needs Chrome or Edge version 116 or newer.');return}
+  if(!('documentPictureInPicture' in window)){toast('The floating panel needs Chrome or Edge version 116 or newer.');return}
   if(pipWin){pipWin.focus();return}
-  const cam=needCam()&&!!camStream;
-  pipWin=await documentPictureInPicture.requestWindow(cam?{width:230,height:230}:{width:330,height:56});
+  const cam=pipHasCam();
+  pipWin=await documentPictureInPicture.requestWindow(live.active?{width:360,height:620}:(cam?{width:230,height:230}:{width:330,height:56}));
   pipWin.addEventListener('pagehide',()=>{pipWin=null;updateUi()});
   buildPip();
 }
+const pipHasCam=()=>S.mode==='screencam'&&S.camStyle==='bubble'&&!NATIVE&&!!camStream;
+const escH=t=>String(t).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 function buildPip(){
-  if(!pipWin)return;const d=pipWin.document;const cam=needCam()&&!!camStream;
+  if(!pipWin)return;const d=pipWin.document;const cam=pipHasCam()||(S.mode!=='screen'&&!live.active&&!!camStream&&!NATIVE);
   d.head.innerHTML=`<style>${PIPCSS}</style>`;d.title='LiteCast';
-  d.body.className=(cam?'cam ':'nocam ')+S.shape+(S.mirror?' mirror':'');
-  d.body.innerHTML=(cam?'<video id="pv" autoplay muted playsinline></video><div class="off" id="poff">camera hidden</div>':'')+
-   `<div class="bar"><span class="dot"></span><span class="t" id="pt">00:00</span><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${cam?'<button id="pcam">🎥</button>':''}</div><div id="pcd"></div>`;
-  if(cam){const v=d.getElementById('pv');v.srcObject=camStream;v.play().catch(()=>{})}
+  if(live.active){
+    const pcam=pipHasCam();
+    d.body.className='panel '+S.shape+(S.mirror?' mirror':'')+(live.compact?' compact':'');
+    d.body.innerHTML=`<div class="ph">${pcam?'<video class="pcam" id="pv" autoplay muted playsinline></video>':''}
+      <div class="phx"><div class="prow"><span class="dot"></span><span class="t" id="pt">00:00</span><span class="pill" id="plive">● LIVE · <span id="pcount">0</span></span><span id="palert"></span></div>
+      <div class="prow"><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${S.mode!=='screen'?'<button id="pcam">🎥</button>':''}<button id="pcomp" title="Show / hide the class list">${live.compact?'▾':'▴'}</button></div></div></div>
+      <div class="pbody">
+        <div class="sec" id="pwaitSec"><div class="sh">🚪 Waiting room<span class="sp"></span><button data-act="admitall">Admit all</button></div><div id="pwait"></div></div>
+        <div class="sec"><div class="sh">👥 Students<span class="sp"></span><button data-act="muteall">🔇 all</button></div><div id="pstud"></div></div>
+        <div class="sec" id="pscr" style="display:none"><div class="sh">🖥 <span id="pscrname"></span></div><video id="psv" autoplay muted playsinline></video><div class="prow" style="margin-top:5px"><button data-act="showscr" id="pshow">📺 Show to class</button><button data-act="stopscr">✖ Stop share</button></div></div>
+        <div class="sec"><div class="sh">💬 Chat</div><div class="pchat" id="pchat"></div><form id="pform"><input id="pmsg" placeholder="Message to everyone…" autocomplete="off"><button>Send</button></form></div>
+      </div><div id="pcd"></div>`;
+    d.getElementById('pcomp').onclick=()=>{live.compact=!live.compact;d.body.classList.toggle('compact',live.compact);d.getElementById('pcomp').textContent=live.compact?'▾':'▴';try{pipWin.resizeTo(360,live.compact?(pcam?96:92):620)}catch(e){}};
+    d.body.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;panelAction(b.dataset.act,b.dataset.id)});
+    d.getElementById('pform').addEventListener('submit',e=>{e.preventDefault();const i=d.getElementById('pmsg');const t=i.value.trim();if(t){teacherSay(t);i.value=''}});
+    const pc=d.getElementById('pchat');(live.chat||[]).slice(-30).forEach(m=>pipChat(m));
+    if(pcam){const v=d.getElementById('pv');v.srcObject=camStream;v.play().catch(()=>{})}
+  }else{
+    d.body.className=(cam?'cam ':'nocam ')+S.shape+(S.mirror?' mirror':'');
+    d.body.innerHTML=(cam?'<video id="pv" autoplay muted playsinline></video><div class="off" id="poff">camera hidden</div>':'')+
+     `<div class="bar"><span class="dot"></span><span class="t" id="pt">00:00</span><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${cam?'<button id="pcam">🎥</button>':''}</div><div id="pcd"></div>`;
+    if(cam){const v=d.getElementById('pv');v.srcObject=camStream;v.play().catch(()=>{})}
+  }
   d.getElementById('prec').onclick=()=>rec.active?stopRec(true):startRec();
   d.getElementById('ppause').onclick=togglePause;
   d.getElementById('pmic').onclick=toggleMic;
   const pc=d.getElementById('pcam');if(pc)pc.onclick=toggleCam;
-  updateUi();
+  renderPip();updateUi();
+}
+function pipChat(m){
+  if(!pipWin)return;const box=pipWin.document.getElementById('pchat');if(!box)return;
+  const el=pipWin.document.createElement('div');
+  if(m.sys){el.className='sys';el.textContent=m.text}else{const b=pipWin.document.createElement('b');b.textContent=m.from+': ';el.appendChild(b);el.appendChild(pipWin.document.createTextNode(m.text))}
+  box.appendChild(el);while(box.children.length>60)box.firstChild.remove();box.scrollTop=box.scrollHeight;
+}
+function studentRows(withScreenBtn){
+  const list=[...live.viewers.values()].sort((a,b)=>(b.hand-a.hand)||(!!b.mic-!!a.mic));
+  return list.length?list.map(v=>`<div class="it ${v.mic?'talk':v.hand?'hand':''}"><span class="nm">${v.hand?'✋ ':''}${v.mic?'🎙 ':''}${v.screen?'🖥 ':''}${escH(v.name)}</span>`+
+    (v.hand?`<button data-act="hand" data-id="${v.id}" title="Lower hand">✋↓</button>`:'')+
+    (v.mic?`<button data-act="mute" data-id="${v.id}" title="Mute">🔇</button>`:(!S.micFree?`<button data-act="mic" data-id="${v.id}" title="${v.micOk?'Take the mic back':'Give the mic'}">${v.micOk?'🎙✓':'🎙'}</button>`:''))+
+    `<button data-act="remove" data-id="${v.id}" title="Remove from class">✕</button></div>`).join(''):'<div class="empty">No students yet</div>';
+}
+function waitingRows(){
+  const w=[...live.waiting.values()];
+  return w.length?w.map(x=>`<div class="it wait"><span class="nm">🚪 ${escH(x.name)}</span><button class="g" data-act="admit" data-id="${x.id}">Admit</button><button data-act="deny" data-id="${x.id}">Decline</button></div>`).join(''):'<div class="empty">Nobody is waiting</div>';
+}
+function renderPip(){
+  if(!pipWin||!live.active)return;const d=pipWin.document;if(!d.body.classList.contains('panel'))return;
+  const q=id=>d.getElementById(id);
+  if(q('pwait'))q('pwait').innerHTML=waitingRows();
+  if(q('pwaitSec'))q('pwaitSec').style.display=(S.admitManual||live.waiting.size)?'':'none';
+  if(q('pstud'))q('pstud').innerHTML=studentRows();
+  if(q('pcount'))q('pcount').textContent=live.viewers.size;
+  const hands=[...live.viewers.values()].filter(v=>v.hand).length,waits=live.waiting.size;
+  if(q('palert'))q('palert').innerHTML=(waits?`<span class="badge">🚪 ${waits}</span> `:'')+(hands?`<span class="badge">✋ ${hands}</span>`:'');
+  const sv=live.viewers.get(live.screenOf);
+  if(q('pscr')){q('pscr').style.display=sv&&sv.screen?'':'none';
+    if(sv&&sv.screen){q('pscrname').textContent=sv.name+"'s screen";if(q('psv').srcObject!==sv.screen.st){q('psv').srcObject=sv.screen.st;q('psv').play().catch(()=>{})}
+      q('pshow').style.display=cap.direct?'none':'';q('pshow').textContent=cap.override===sv.screen.src?'↩ Back to my screen':'📺 Show to class'}
+    else if(q('psv'))q('psv').srcObject=null}
 }
 
 /* ---------------- toggles ---------------- */
@@ -897,6 +982,7 @@ function updateUi(){
   if(pipWin){const d=pipWin.document;d.body.classList.toggle('rec',rec.active);d.body.classList.toggle('paused',rec.paused);
     const q=id=>d.getElementById(id);if(q('pt'))q('pt').textContent=t;if(q('prec'))q('prec').textContent=rec.active?'■ Stop':'● Rec';
     if(q('ppause'))q('ppause').textContent=rec.paused?'▶':'⏸';if(q('pmic'))q('pmic').textContent=micMuted?'🔇':'🎙';
+    if(q('pcam'))q('pcam').textContent=S.camVisible?'🎥':'🚫';if(q('plive'))q('plive').classList.toggle('off2',!live.active);
     if(q('pv'))q('pv').style.visibility=S.camVisible?'visible':'hidden';if(q('poff'))q('poff').style.display=S.camVisible?'none':'flex'}
 }
 const mbPerMin=()=>(S.vk+(S.micOn||S.sysAudio?S.ak:0))*1000/8*60/1048576;
@@ -912,7 +998,7 @@ function renderSettings(){
   const rv=S.w+'x'+S.h;if(![...$('#res').options].some(o=>o.value===rv))$('#res').insertAdjacentHTML('beforeend',`<option value="${rv}">${S.w}×${S.h}</option>`);$('#res').value=rv;
   $('#fps').value=String(S.fps);$('#vk').value=S.vk;$('#vkv').textContent=S.vk;$('#ak').value=String(S.ak);
   $('#fmt').value=S.format;
-  $('#allowRec').checked=S.allowRec;$('#micFree').checked=S.micFree;$('#room').value=S.room;$('#liveKbps').value=String(S.liveKbps);$('#turnMode').value=S.turnMode;$('#turnUrl').value=S.turnUrl;$('#turnUrls').value=S.turnUrls;$('#turnUser').value=S.turnUser;$('#turnPass').value=S.turnPass;$('#publicUrl').value=S.publicUrl;
+  $('#admitManual').checked=S.admitManual;$('#chime').checked=S.chime;$('#allowRec').checked=S.allowRec;$('#micFree').checked=S.micFree;$('#room').value=S.room;$('#liveKbps').value=String(S.liveKbps);$('#turnMode').value=S.turnMode;$('#turnUrl').value=S.turnUrl;$('#turnUrls').value=S.turnUrls;$('#turnUser').value=S.turnUser;$('#turnPass').value=S.turnPass;$('#publicUrl').value=S.publicUrl;
   $('#turnUrlRow').style.display=S.turnMode==='url'?'':'none';$('#turnCustom').style.display=S.turnMode==='custom'?'':'none';
   $('#upEst').innerHTML=`Your upload needed ≈ ${((S.liveKbps+40)/1000).toFixed(2)} Mbps per student · 8 students ≈ <b>${(8*(S.liveKbps+40)/1000).toFixed(1)} Mbps</b>`;
   const m=mbPerMin();
@@ -934,6 +1020,8 @@ $('#room').onchange=e=>{const v=e.target.value.trim().replace(/[^A-Za-z0-9_-]/g,
 $('#newRoom').onclick=()=>{S.room=newRoomId();renderSettings();toast('New class link created.')};
 $('#liveKbps').onchange=e=>{S.liveKbps=+e.target.value;renderSettings();applyLiveBitrate();renderLive()};
 $('#turnMode').onchange=e=>{S.turnMode=e.target.value;renderSettings()};
+$('#admitManual').onchange=e=>{S.admitManual=e.target.checked;save();renderLive();if(!S.admitManual&&live.active&&live.waiting.size)toast('Students already waiting still need “Admit”.',3000)};
+$('#chime').onchange=e=>{S.chime=e.target.checked;save();if(S.chime)chime()};
 $('#micFree').onchange=e=>{S.micFree=e.target.checked;save();if(live.active)broadcast({t:'policy',rec:S.allowRec,mic:S.micFree});toast(S.micFree?'Students can unmute themselves':'Students must ask before speaking',2200)};
 $('#allowRec').onchange=e=>{S.allowRec=e.target.checked;save();if(live.active)broadcast({t:'policy',rec:S.allowRec,mic:S.micFree});toast(S.allowRec?'Students may record':'Student recording turned off',2000)};
 ['turnUrl','turnUrls','turnUser','turnPass','publicUrl'].forEach(k=>$('#'+k).onchange=e=>{S[k]=e.target.value.trim();renderSettings()});
@@ -1052,7 +1140,7 @@ async function goLive(){
       catch(e){lastErr=e;if(e.type==='unavailable-id'){$('#liveBtn').textContent='⏳ Reclaiming link…';await sleep(5000)}else break}
     }
     if(!peer){toast('Could not go live: '+(lastErr&&lastErr.type==='unavailable-id'?'this class link is already in use (is LiteCast live in another tab?). Press ↻ for a new link.':lastErr?lastErr.message:'unknown error'),8000);if(!wasCap&&!rec.active)stopCapture();return}
-    live.peer=peer;live.active=true;live.t0=performance.now();live.viewers.clear();
+    live.peer=peer;live.active=true;live.t0=performance.now();live.viewers.clear();live.waiting.clear();live.admitted.clear();live.blocked.clear();live.locked=false;live.att.clear();
     peer.on('connection',onViewerConn);
     peer.on('call',onStudentCall);
     peer.on('disconnected',()=>{if(live.active&&!peer.destroyed){sysChat('Connection to live server dropped — reconnecting…');setTimeout(()=>{try{peer.reconnect()}catch{}},1500)}});
@@ -1060,13 +1148,16 @@ async function goLive(){
     $('#liveLink').value=classLink();
     $('#tChat').innerHTML='';live.chat=[];sysChat('Class started. Share the link with your students.');
     renderLive();updateUi();
-    toast('📡 You are live! Copy the link or send it on WhatsApp.',5000);
+    if(pipWin)buildPip();
+    toast('📡 You are live! Send the link, then click <b>⧉ Floating class panel</b> to keep the class controls on top of PowerPoint and other apps.',8000);
   }finally{live.starting=false;$('#liveBtn').disabled=false;updateUi()}
 }
 function endLive(){
   if(!live.active) return;
   broadcast({t:'end'});
-  live.active=false;
+  for(const w of live.waiting.values()){try{w.conn.send({t:'end'});w.conn.close()}catch{}}live.waiting.clear();
+  for(const a of live.att.values())if(!a.out)a.out=Date.now();
+  live.active=false;if(pipWin)setTimeout(buildPip,50);
   setTimeout(()=>{
     for(const v of live.viewers.values()){try{v.call&&v.call.close()}catch{}try{v.conn.close()}catch{}}
     live.viewers.clear();try{live.peer&&live.peer.destroy()}catch{}live.peer=null;renderLive();
@@ -1074,21 +1165,73 @@ function endLive(){
   if(!rec.active)stopCapture();
   renderLive();updateUi();toast('Live class ended.');
 }
+function chime(kind){
+  if(!S.chime)return;
+  try{ensureAudio();const t=audioCtx.currentTime,o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type='sine';o.frequency.setValueAtTime(kind==='hand'?660:880,t);o.frequency.setValueAtTime(kind==='hand'?880:1175,t+.12);
+    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.18,t+.02);g.gain.exponentialRampToValueAtTime(0.0001,t+.45);
+    o.connect(g).connect(audioCtx.destination);o.start(t);o.stop(t+.5)}catch(e){}
+}
 function onViewerConn(conn){
   conn.on('open',()=>{
     const name=String((conn.metadata&&conn.metadata.name)||'Student').slice(0,40);
+    if(live.blocked.has(conn.peer)||live.locked){try{conn.send({t:live.locked?'locked':'removed'})}catch{}setTimeout(()=>{try{conn.close()}catch{}},400);return}
+    if(S.admitManual&&!live.admitted.has(conn.peer)){
+      live.waiting.set(conn.peer,{id:conn.peer,name,conn,t:Date.now()});
+      try{conn.send({t:'wait',title:S.title||'Live class'})}catch{}
+      chime('wait');toast(`🚪 <b>${escH(name)}</b> is waiting to join`,4000);renderLive();return;
+    }
+    admitViewer(conn,name);
+  });
+  conn.on('data',d=>{if(!live.waiting.has(conn.peer))onViewerData(conn.peer,d)});
+  conn.on('close',()=>{if(live.waiting.delete(conn.peer)){renderLive();return}dropViewer(conn.peer)});
+  conn.on('error',()=>{if(live.waiting.delete(conn.peer)){renderLive();return}dropViewer(conn.peer)});
+}
+function admitViewer(conn,name){
+  {
+    live.admitted.add(conn.peer);
     const old=live.viewers.get(conn.peer);if(old)dropViewer(conn.peer,true);
     const v={id:conn.peer,name,conn,call:null,hand:false};
     live.viewers.set(conn.peer,v);
     send(v,{t:'hello',title:S.title||'Live class',chat:live.chat.slice(-40),rec:S.allowRec,mic:S.micFree});
     callViewer(v);
+    const a=live.att.get(conn.peer)||{name,sessions:[]};a.name=name;a.sessions.push({in:Date.now(),out:0});live.att.set(conn.peer,a);
     sysChat(`${name} joined`);renderLive();
     if(live.viewers.size===MAX_SUGGESTED+1) toast(`${live.viewers.size} students now — if video gets choppy, lower “Quality / student”.`,6000);
-  });
-  conn.on('data',d=>onViewerData(conn.peer,d));
-  conn.on('close',()=>dropViewer(conn.peer));
-  conn.on('error',()=>dropViewer(conn.peer));
+  }
 }
+function admit(id){const w=live.waiting.get(id);if(!w)return;live.waiting.delete(id);admitViewer(w.conn,w.name)}
+function decline(id){const w=live.waiting.get(id);if(!w)return;live.waiting.delete(id);try{w.conn.send({t:'denied'})}catch{}setTimeout(()=>{try{w.conn.close()}catch{}},400);renderLive()}
+function removeStudent(id){const v=live.viewers.get(id);if(!v)return;if(!confirm(`Remove ${v.name} from the class?`))return;
+  live.blocked.add(id);send(v,{t:'removed'});const c=v.conn;dropViewer(id);setTimeout(()=>{try{c.close()}catch{}},400);sysChat(`${v.name} was removed`)}
+function teacherSay(t){const m={from:'Teacher',text:t.slice(0,500),ts:Date.now()};addChat('#tChat',m);live.chat.push(m);broadcast({t:'chat',...m})}
+function panelAction(act,id){
+  const v=id&&live.viewers.get(id);
+  if(act==='admit')admit(id);else if(act==='deny')decline(id);
+  else if(act==='admitall'){[...live.waiting.keys()].forEach(admit)}
+  else if(act==='muteall')$('#muteAll').click();
+  else if(act==='remove')removeStudent(id);
+  else if(act==='showscr')$('#stuShow').click();else if(act==='stopscr')$('#stuStop').click();
+  else if(v&&act==='hand'){v.hand=false;send(v,{t:'handdown'})}
+  else if(v&&act==='mute'){send(v,{t:'mute'});detachStudentMic(v,true);if(!S.micFree)v.micOk=false}
+  else if(v&&act==='mic'){v.micOk=!v.micOk;send(v,{t:'micAllow',on:v.micOk});if(v.micOk){v.hand=false;send(v,{t:'handdown'})}else{send(v,{t:'mute'});detachStudentMic(v,true)}}
+  renderLive();
+}
+function exportAttendance(){
+  if(!live.att.size)return toast('Nobody has joined yet.');
+  const f=d=>{const x=new Date(d),p=n=>String(n).padStart(2,'0');return `${x.getFullYear()}-${p(x.getMonth()+1)}-${p(x.getDate())} ${p(x.getHours())}:${p(x.getMinutes())}`};
+  const rows=[['Student','First joined','Last left','Minutes attended','Times joined']];
+  for(const a of live.att.values()){const first=a.sessions[0].in,last=a.sessions[a.sessions.length-1],mins=a.sessions.reduce((t,s)=>t+((s.out||Date.now())-s.in),0)/60000;
+    rows.push([a.name,f(first),last.out?f(last.out):'still in class',mins.toFixed(1),a.sessions.length])}
+  const csv='\ufeff'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv'}),name=`${safeName(S.title)}_attendance_${stamp()}.csv`;
+  if(NATIVE){nativeSave(blob,name).then(u=>{toast('Attendance saved to Downloads/LiteCast');NATIVE.share(u,'text/csv',name)}).catch(e=>toast(e.message));return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();toast('Attendance list downloaded (opens in Excel)');
+}
+$('#attBtn').onclick=exportAttendance;
+$('#lockBtn').onclick=()=>{live.locked=!live.locked;renderLive();toast(live.locked?'🔒 Class locked — nobody new can join':'🔓 Class open again',2500)};
+$('#panelBtn').onclick=()=>openPip().catch(e=>toast(e.message));
+$('#waitBox').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)panelAction(b.dataset.act,b.dataset.id)});
 function callViewer(v){
   if(!live.active||!cap.stream) return;
   try{if(v.call)v.call.close()}catch{}
@@ -1167,13 +1310,14 @@ function detachStudentScreen(v,quiet){
 }
 $('#stuShow').onclick=()=>{const v=live.viewers.get(live.screenOf);if(!v||!v.screen)return;
   if(cap.override===v.screen.src){cap.override=null;$('#stuShow').textContent='📺 Show to class';toast('Back to your screen',1800)}
-  else{cap.override=v.screen.src;$('#stuShow').textContent='↩ Back to my screen';toast(`Showing ${v.name}'s screen to the class`,2500)}};
+  else{cap.override=v.screen.src;$('#stuShow').textContent='↩ Back to my screen';toast(`Showing ${v.name}'s screen to the class`,2500)}renderPip()};
 $('#stuStop').onclick=()=>{const v=live.viewers.get(live.screenOf);if(v){send(v,{t:'stopScreen'});detachStudentScreen(v)}};
 $('#muteAll').onclick=()=>{let n=0;for(const v of live.viewers.values()){if(v.mic){send(v,{t:'mute'});detachStudentMic(v,true);n++}if(!S.micFree)v.micOk=false}renderLive();toast(n?`Muted ${n} student${n>1?'s':''}`:'No student is speaking',1800)};
 function dropViewer(id,silent){
   const v=live.viewers.get(id);if(!v)return;
   live.viewers.delete(id);try{v.call&&v.call.close()}catch{}
   detachStudentMic(v,true);detachStudentScreen(v,true);
+  const at=live.att.get(id);if(at){const s0=at.sessions[at.sessions.length-1];if(s0&&!s0.out)s0.out=Date.now()}
   if(v.dest){try{cap.baseMix&&cap.baseMix.disconnect(v.dest)}catch{}for(const o of live.viewers.values())if(o.mic)try{o.mic.g.disconnect(v.dest)}catch{}v.dest=null}
   if(!silent&&live.active){sysChat(`${v.name} left`);renderLive()}
 }
@@ -1184,13 +1328,15 @@ function onViewerData(id,d){
   if(d.t==='chat'&&typeof d.text==='string'){
     const m={from:v.name,text:d.text.slice(0,500),ts:Date.now()};addChat('#tChat',m);live.chat.push(m);broadcast({t:'chat',...m});
   }else if(d.t==='hand'){
-    v.hand=!!d.on;renderLive();if(v.hand){toast(`✋ ${v.name} raised a hand`,4000);sysChat(`✋ ${v.name} raised a hand`)}
+    v.hand=!!d.on;renderLive();if(v.hand){chime('hand');toast(`✋ ${v.name} raised a hand`,4000);sysChat(`✋ ${v.name} raised a hand`)}
   }else if(d.t==='resend'){callViewer(v)}
   else if(d.t==='micoff'){detachStudentMic(v)}
   else if(d.t==='screenoff'){detachStudentScreen(v)}
 }
 function sysChat(text){addChat('#tChat',{sys:true,text})}
+
 function addChat(sel,m){
+  if(sel==='#tChat')pipChat(m);
   const box=$(sel);if(!box)return;const d=document.createElement('div');
   if(m.sys){d.className='sys';d.textContent=m.text}else{const b=document.createElement('b');b.textContent=m.from+': ';d.appendChild(b);d.appendChild(document.createTextNode(m.text))}
   box.appendChild(d);box.scrollTop=box.scrollHeight;
@@ -1203,8 +1349,13 @@ function renderLive(){
   const esc=t=>t.replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
   $('#students').innerHTML=list.length?list.map(v=>`<span class="${v.mic?'talk':v.hand?'hand':''}" data-id="${v.id}">${v.hand?'✋':''}${v.mic?'🎙':''}${v.screen?'🖥':''} ${esc(v.name)}`+
     (v.mic?`<button class="mini" data-act="mute" title="Mute">🔇</button>`:(!S.micFree?`<button class="mini" data-act="mic" title="${v.micOk?'Take the mic back':'Give the mic'}">${v.micOk?'🎙✓':'🎙'}</button>`:''))+
-    (v.hand?`<button class="mini" data-act="hand" title="Lower hand">✋↓</button>`:'')+`</span>`).join(''):'<span style="opacity:.6">Waiting for students…</span>';
+    (v.hand?`<button class="mini" data-act="hand" title="Lower hand">✋↓</button>`:'')+`<button class="mini" data-act="remove" title="Remove from class">✕</button></span>`).join(''):'<span style="opacity:.6">Waiting for students…</span>';
   const talking=list.filter(v=>v.mic).map(v=>v.name);$('#talkInfo').textContent=talking.length?'Speaking: '+talking.join(', '):'';
+  const w=[...live.waiting.values()];
+  $('#waitBox').innerHTML=w.length?`<div class="hd">🚪 Waiting room (${w.length}) <button class="btn sm pri" data-act="admitall">Admit all</button></div>`+w.map(x=>`<div class="it"><span class="nm">🚪 <b>${escH(x.name)}</b> wants to join</span><button class="btn sm pri" data-act="admit" data-id="${x.id}">Admit</button><button class="btn sm" data-act="deny" data-id="${x.id}">Decline</button></div>`).join(''):'';
+  $('#lockBtn').textContent=live.locked?'🔒 Class locked':'🔓 Class open';$('#lockBtn').classList.toggle('on',live.locked);
+  $('#panelBtn').style.display=('documentPictureInPicture' in window)?'':'none';
+  renderPip();
   const up=(n*(S.liveKbps+40))/1000;
   $('#liveWarn').innerHTML=n?`Your upload in use ≈ <b>${up.toFixed(1)} Mbps</b>${n>MAX_SUGGESTED?' — many students: lower “Quality / student” if anyone reports freezing.':''}`:'';
 }
@@ -1212,9 +1363,10 @@ $('#students').addEventListener('click',e=>{const b=e.target.closest('button[dat
   const a=b.dataset.act;
   if(a==='hand'){v.hand=false;send(v,{t:'handdown'})}
   else if(a==='mute'){send(v,{t:'mute'});detachStudentMic(v,true);if(!S.micFree)v.micOk=false}
+  else if(a==='remove'){removeStudent(v.id);return}
   else if(a==='mic'){v.micOk=!v.micOk;send(v,{t:'micAllow',on:v.micOk});if(v.micOk){v.hand=false;send(v,{t:'handdown'});toast(`${v.name} can speak now`,2000)}else{send(v,{t:'mute'});detachStudentMic(v,true)}}
   renderLive()});
-$('#tForm').addEventListener('submit',e=>{e.preventDefault();const t=$('#tMsg').value.trim();if(!t||!live.active)return;const m={from:'Teacher',text:t.slice(0,500),ts:Date.now()};addChat('#tChat',m);live.chat.push(m);broadcast({t:'chat',...m});$('#tMsg').value=''});
+$('#tForm').addEventListener('submit',e=>{e.preventDefault();const t=$('#tMsg').value.trim();if(!t||!live.active)return;teacherSay(t);$('#tMsg').value=''});
 $('#liveBtn').onclick=()=>live.active?(confirm('End the live class for everyone?')&&endLive()):goLive();
 $('#copyLink').onclick=async()=>{try{await navigator.clipboard.writeText($('#liveLink').value);toast('Link copied ✔',1800)}catch{$('#liveLink').select();document.execCommand('copy');toast('Link copied ✔',1800)}};
 const inviteText=()=>`Join my live class "${S.title||'Lecture'}" now: ${$('#liveLink').value}`;
@@ -1343,9 +1495,13 @@ function viewerMain(classId,iceParam){
     conn.on('open',()=>{stat(gotStream?'● Live':'Connected — starting video…',gotStream);if(!gotStream)msg('Connected. Video is starting…')});
     conn.on('data',d=>{
       if(!d||typeof d!=='object')return;
-      if(d.t==='hello'){lessonTitle=d.title||'Lecture';allowRec=d.rec!==false;micFree=d.mic!==false;updRec();updTalk();$('#vTitle').textContent=d.title||'Live class';document.title=(d.title||'Live class')+' — LiteCast Live';$('#vChat').innerHTML='';(d.chat||[]).forEach(m=>addChat('#vChat',m))}
+      if(d.t==='hello'){if(!gotStream)msg('Admitted. Video is starting…');lessonTitle=d.title||'Lecture';allowRec=d.rec!==false;micFree=d.mic!==false;updRec();updTalk();$('#vTitle').textContent=d.title||'Live class';document.title=(d.title||'Live class')+' — LiteCast Live';$('#vChat').innerHTML='';(d.chat||[]).forEach(m=>addChat('#vChat',m))}
       else if(d.t==='chat')addChat('#vChat',d);
       else if(d.t==='handdown'){hand=false;updHand()}
+      else if(d.t==='wait'){stat('In the waiting room');msg('Please wait — the teacher will let you in shortly.')}
+      else if(d.t==='denied'){ended=true;stat('Not admitted');msg('The teacher did not admit you to this class.');setTimeout(()=>{try{peer.destroy()}catch{}},500)}
+      else if(d.t==='removed'){ended=true;stopTalk();stopShare();if(vrec)stopVRec();try{vid.srcObject=null}catch{}stat('Removed');msg('You were removed from the class by the teacher.');setTimeout(()=>{try{peer.destroy()}catch{}},500)}
+      else if(d.t==='locked'){ended=true;stat('Class locked');msg('The class is locked. Ask your teacher to unlock it, then reload this page.');setTimeout(()=>{try{peer.destroy()}catch{}},500)}
       else if(d.t==='mute'){if(micCall){stopTalk();toast('The teacher muted your microphone.',3000)}}
       else if(d.t==='micAllow'){micOk=!!d.on;if(micOk){toast('🎙 The teacher gave you the mic — tap Unmute to speak.',5000)}else if(micCall&&!micFree)stopTalk();updTalk()}
       else if(d.t==='micDenied'){stopTalk(true);toast('Wait for the teacher to give you the mic.',3500)}
