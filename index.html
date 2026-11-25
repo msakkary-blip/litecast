@@ -132,6 +132,14 @@ html.native .kbd,html.native #pipBtn,html.native .desk-only{display:none!importa
 .stuscreen.show{display:block}
 .stuscreen video{width:100%;max-height:300px;background:#000;border-radius:8px;border:1px solid var(--line)}
 .vtalk{display:flex;gap:6px}
+.lvl{display:inline-block;width:46px;height:6px;border-radius:3px;background:#2a2f3b;overflow:hidden;vertical-align:middle}
+.lvl i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2fbf71,#c7e43a,#ff4d4f)}
+.vmeter{height:8px;border-radius:4px;background:#2a2f3b;overflow:hidden}
+.vmeter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2fbf71,#c7e43a,#ff4d4f);transition:width .08s}
+.mutedbar{background:#3a2a10;border:1px solid #f5a524;color:#f8c56a;border-radius:9px;padding:7px 10px;font-size:13px;display:none}
+.mutedbar.show{display:block}
+.vask{position:absolute;left:50%;top:18px;transform:translateX(-50%);background:#0f7b4f;border-radius:12px;padding:12px 16px;display:none;flex-direction:column;gap:8px;align-items:center;box-shadow:0 10px 40px rgba(0,0,0,.5);z-index:5;text-align:center}
+.vask.show{display:flex}
 .vtalk .btn{flex:1;justify-content:center}
 .btn.live2{background:#0f7b4f;border-color:#0f7b4f;color:#fff}
 details.adv summary{cursor:pointer;color:var(--mut);font-size:12.5px;margin-top:10px}
@@ -337,17 +345,21 @@ body.viewer > header, body.viewer .app{display:none}
       <div class="ov show" id="vJoin">
         <div style="font-size:18px;font-weight:600">Join the live class</div>
         <input type="text" id="vName" placeholder="Your name" maxlength="40" style="max-width:280px;text-align:center">
+        <label class="chk" style="justify-content:center"><input type="checkbox" id="vMicPerm" checked> Allow my microphone (so I can answer when asked)</label>
         <button class="btn pri" id="vJoinBtn">Join class</button>
         <div class="hint">Works in Chrome, Edge, Safari and Firefox — on phone or computer.</div>
         <div class="hint" id="vApk" style="display:none">On Android you can also use the <a href="https://github.com/msakkary-blip/litecast/releases/download/android-latest/LiteCast.apk">LiteCast app</a>.</div>
       </div>
+      <div class="vask" id="vAsk"><div style="font-size:16px;font-weight:600">🎙 The teacher invites you to speak</div><div style="display:flex;gap:8px"><button class="btn" id="vAskYes" style="background:#fff;color:#0b3b25;font-weight:700">🎙 Unmute now</button><button class="btn" id="vAskNo">Not now</button></div></div>
       <div class="ov" id="vMsgOv"><div id="vMsgTxt" style="font-size:16px"></div><button class="btn pri" id="vPlay" style="display:none">▶ Tap to start video &amp; sound</button></div>
     </div>
     <div class="vside">
       <div class="chatlog" id="vChat"></div>
       <form class="chatform" id="vForm"><input type="text" id="vMsg" placeholder="Ask a question…" autocomplete="off"><button class="btn sm pri">Send</button></form>
       <div class="vtalk"><button class="btn" id="vTalk">🎙 Unmute</button><button class="btn" id="vShare">🖥 Share my screen</button></div>
+      <div class="vmeter" id="vMeterWrap" style="display:none"><i id="vMeter"></i></div>
       <div class="hint" id="vTalkInfo" style="margin-top:0"></div>
+      <div class="mutedbar" id="vMutedBar">🔇 You are muted. To talk, tap <b>🎙 Unmute</b>.</div>
       <button class="btn" id="vHand">✋ Raise hand</button>
       <button class="btn" id="vRec">⏺ Record this lecture</button>
       <div class="hint" id="vRecInfo" style="margin-top:0"></div>
@@ -533,7 +545,14 @@ function onTick(){
   if(!document.hidden||cap.active) draw();
   if(cap.active&&!cap.direct&&cap.vtrack&&cap.vtrack.requestFrame&&!(rec.active&&rec.paused&&!live.active)) cap.vtrack.requestFrame();
   const n=performance.now();
-  if(n-lastUi>200){lastUi=n;meter();updateUi()}
+  if(n-lastUi>200){lastUi=n;meter();updateUi();studentLevels()}
+}
+function studentLevels(){
+  if(!live.active)return;
+  for(const v of live.viewers.values()){if(!v.mic||!v.mic.an)continue;v.mic.an.getFloatTimeDomainData(v.mic.buf);let x=0;for(const q of v.mic.buf)x+=q*q;
+    const w=Math.max(0,Math.min(100,(20*Math.log10(Math.sqrt(x/v.mic.buf.length)+1e-8)+60)/60*100))+'%';
+    document.querySelectorAll(`[data-lvl="${v.id}"]`).forEach(e=>e.style.width=w);
+    if(pipWin)pipWin.document.querySelectorAll(`[data-lvl="${v.id}"]`).forEach(e=>e.style.width=w)}
 }
 function meter(){
   if(!analyser){$('#meter').style.width='0';return}
@@ -935,7 +954,7 @@ function studentRows(withScreenBtn){
   const list=[...live.viewers.values()].sort((a,b)=>(b.hand-a.hand)||(!!b.mic-!!a.mic));
   return list.length?list.map(v=>`<div class="it ${v.mic?'talk':v.hand?'hand':''}"><span class="nm">${v.hand?'✋ ':''}${v.mic?'🎙 ':''}${v.screen?'🖥 ':''}${escH(v.name)}</span>`+
     (v.hand?`<button data-act="hand" data-id="${v.id}" title="Lower hand">✋↓</button>`:'')+
-    (v.mic?`<button data-act="mute" data-id="${v.id}" title="Mute">🔇</button>`:(!S.micFree?`<button data-act="mic" data-id="${v.id}" title="${v.micOk?'Take the mic back':'Give the mic'}">${v.micOk?'🎙✓':'🎙'}</button>`:''))+
+    (v.mic?`<span class="lvl"><i data-lvl="${v.id}"></i></span><button data-act="mute" data-id="${v.id}" title="Mute">🔇</button>`:`<button data-act="ask" data-id="${v.id}" title="Invite to speak">🙋</button>`+(!S.micFree?`<button data-act="mic" data-id="${v.id}" title="${v.micOk?'Take the mic back':'Give the mic'}">${v.micOk?'🎙✓':'🎙'}</button>`:''))+
     `<button data-act="remove" data-id="${v.id}" title="Remove from class">✕</button></div>`).join(''):'<div class="empty">No students yet</div>';
 }
 function waitingRows(){
@@ -1211,6 +1230,7 @@ function panelAction(act,id){
   else if(act==='admitall'){[...live.waiting.keys()].forEach(admit)}
   else if(act==='muteall')$('#muteAll').click();
   else if(act==='remove')removeStudent(id);
+  else if(v&&act==='ask'){send(v,{t:'askMic'});toast(`Invited ${escH(v.name)} to speak`,2000)}
   else if(act==='showscr')$('#stuShow').click();else if(act==='stopscr')$('#stuStop').click();
   else if(v&&act==='hand'){v.hand=false;send(v,{t:'handdown'})}
   else if(v&&act==='mute'){send(v,{t:'mute'});detachStudentMic(v,true);if(!S.micFree)v.micOk=false}
@@ -1285,7 +1305,9 @@ function attachStudentMic(v,st,call){
   const src=audioCtx.createMediaStreamSource(st),g=audioCtx.createGain();src.connect(g);
   if(cap.dest)g.connect(cap.dest);                       // into your recording
   for(const o of live.viewers.values())if(o!==v){ensureViewerMix(o);if(o.dest)g.connect(o.dest)}  // to the other students
-  v.mic={call,el,src,g};renderLive();sysChat(`🎙 ${v.name} is speaking`);
+  const an=audioCtx.createAnalyser();an.fftSize=512;src.connect(an);
+  v.mic={call,el,src,g,an,buf:new Float32Array(512)};renderLive();sysChat(`🎙 ${v.name} is speaking`);toast(`🎙 <b>${escH(v.name)}</b> is speaking`,2500);
+  send(v,{t:'micHeard'});
 }
 function detachStudentMic(v,quiet){
   const m=v.mic;if(!m)return;v.mic=null;
@@ -1331,6 +1353,8 @@ function onViewerData(id,d){
     v.hand=!!d.on;renderLive();if(v.hand){chime('hand');toast(`✋ ${v.name} raised a hand`,4000);sysChat(`✋ ${v.name} raised a hand`)}
   }else if(d.t==='resend'){callViewer(v)}
   else if(d.t==='micoff'){detachStudentMic(v)}
+  else if(d.t==='micfail'){sysChat(`⚠ ${v.name}'s microphone is blocked on their device (${String(d.why||'').slice(0,40)})`);toast(`⚠ ${escH(v.name)} cannot use their microphone — their browser blocked it.`,6000)}
+  else if(d.t==='micdecline'){sysChat(`${v.name} declined to speak now`)}
   else if(d.t==='screenoff'){detachStudentScreen(v)}
 }
 function sysChat(text){addChat('#tChat',{sys:true,text})}
@@ -1348,7 +1372,7 @@ function renderLive(){
   const list=[...live.viewers.values()];
   const esc=t=>t.replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
   $('#students').innerHTML=list.length?list.map(v=>`<span class="${v.mic?'talk':v.hand?'hand':''}" data-id="${v.id}">${v.hand?'✋':''}${v.mic?'🎙':''}${v.screen?'🖥':''} ${esc(v.name)}`+
-    (v.mic?`<button class="mini" data-act="mute" title="Mute">🔇</button>`:(!S.micFree?`<button class="mini" data-act="mic" title="${v.micOk?'Take the mic back':'Give the mic'}">${v.micOk?'🎙✓':'🎙'}</button>`:''))+
+    (v.mic?`<span class="lvl"><i data-lvl="${v.id}"></i></span><button class="mini" data-act="mute" title="Mute">🔇</button>`:`<button class="mini" data-act="ask" title="Invite to speak">🙋 Invite</button>`)+(v.mic?'':(!S.micFree?`<button class="mini" data-act="mic" title="${v.micOk?'Take the mic back':'Give the mic'}">${v.micOk?'🎙✓':'🎙'}</button>`:''))+
     (v.hand?`<button class="mini" data-act="hand" title="Lower hand">✋↓</button>`:'')+`<button class="mini" data-act="remove" title="Remove from class">✕</button></span>`).join(''):'<span style="opacity:.6">Waiting for students…</span>';
   const talking=list.filter(v=>v.mic).map(v=>v.name);$('#talkInfo').textContent=talking.length?'Speaking: '+talking.join(', '):'';
   const w=[...live.waiting.values()];
@@ -1364,6 +1388,7 @@ $('#students').addEventListener('click',e=>{const b=e.target.closest('button[dat
   if(a==='hand'){v.hand=false;send(v,{t:'handdown'})}
   else if(a==='mute'){send(v,{t:'mute'});detachStudentMic(v,true);if(!S.micFree)v.micOk=false}
   else if(a==='remove'){removeStudent(v.id);return}
+  else if(a==='ask'){send(v,{t:'askMic'});toast(`Invited ${escH(v.name)} to speak`,2000)}
   else if(a==='mic'){v.micOk=!v.micOk;send(v,{t:'micAllow',on:v.micOk});if(v.micOk){v.hand=false;send(v,{t:'handdown'});toast(`${v.name} can speak now`,2000)}else{send(v,{t:'mute'});detachStudentMic(v,true)}}
   renderLive()});
 $('#tForm').addEventListener('submit',e=>{e.preventDefault();const t=$('#tMsg').value.trim();if(!t||!live.active)return;teacherSay(t);$('#tMsg').value=''});
@@ -1381,7 +1406,15 @@ function viewerMain(classId,iceParam){
   const vid=$('#vVid'),stat=(t,ok)=>{$('#vStatus').textContent=t;$('#vStatus').classList.toggle('ok',!!ok)};
   const msg=(t,play)=>{$('#vMsgTxt').textContent=t;$('#vPlay').style.display=play?'':'none';$('#vMsgOv').classList.toggle('show',!!t||!!play)};
   let peer=null,conn=null,ended=false,retryT=null,hand=false,gotStream=false,name='',allowRec=true,vrec=null,lessonTitle='Lecture';
-  let micFree=true,micOk=false,vMic=null,micCall=null,vScr=null,scrCall=null;
+  let micFree=true,micOk=false,vMic=null,micCall=null,vScr=null,scrCall=null,micHeard=false,micTimer=null,mAc=null,mAn=null,mBuf=null,meterT=null,micRetry=0;
+  const micErr=e=>{const n=e&&e.name;
+    if(n==='NotAllowedError'||n==='SecurityError')return 'Your browser blocked the microphone. Tap the 🔒 lock (or ⓘ) next to the web address → Microphone → Allow, then tap Unmute again.';
+    if(n==='NotFoundError'||n==='OverconstrainedError')return 'No microphone was found on this device. Plug in a headset or use a phone.';
+    if(n==='NotReadableError')return 'Your microphone is being used by another app (Zoom, WhatsApp call…). Close it and tap Unmute again.';
+    return 'Could not start your microphone ('+(n||e)+').'};
+  function startMeter(st){try{mAc=mAc||new AudioContext();mAc.resume();mAn=mAc.createAnalyser();mAn.fftSize=1024;mBuf=new Float32Array(1024);mAc.createMediaStreamSource(st).connect(mAn);
+    $('#vMeterWrap').style.display='';clearInterval(meterT);meterT=setInterval(()=>{if(!mAn)return;mAn.getFloatTimeDomainData(mBuf);let x=0;for(const v of mBuf)x+=v*v;const db=20*Math.log10(Math.sqrt(x/mBuf.length)+1e-8);$('#vMeter').style.width=Math.max(0,Math.min(100,(db+60)/60*100))+'%'},120)}catch(e){}}
+  function stopMeter(){clearInterval(meterT);mAn=null;$('#vMeterWrap').style.display='none';$('#vMeter').style.width='0'}
   const canShare=!!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia);
   if(!canShare)$('#vShare').style.display='none';
   const sendT=m=>{try{if(conn&&conn.open)conn.send(m)}catch{}};
@@ -1390,19 +1423,32 @@ function viewerMain(classId,iceParam){
     $('#vTalk').textContent=micCall?'🔇 Mute':(can?'🎙 Unmute':'🎙 Ask to speak');
     $('#vTalk').classList.toggle('live2',!!micCall);
     $('#vShare').textContent=scrCall?'⏹ Stop sharing':'🖥 Share my screen';$('#vShare').classList.toggle('on',!!scrCall);
-    $('#vTalkInfo').textContent=micCall?'🎙 Everyone can hear you':(!can?'The teacher gives the mic — tap “Ask to speak”.':'');
+    $('#vTalkInfo').textContent=micCall?(micHeard?'✓ The teacher can hear you — speak now':'⏳ Connecting your microphone to the teacher…'):(!can?'The teacher gives the mic — tap “Ask to speak”.':'');
+    $('#vMutedBar').classList.toggle('show',!micCall&&gotStream&&can);
   }
   async function startTalk(){
     if(!conn||!conn.open||!peer)return toast('Not connected yet');
     if(!(micFree||micOk)){hand=true;sendT({t:'hand',on:true});updHand();toast('You asked to speak — wait for the teacher.',3000);return}
+    $('#vAsk').classList.remove('show');
     try{vMic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true,channelCount:1}})}
-    catch(e){return toast('Microphone blocked: allow it in the browser to speak. ('+e.name+')',5000)}
-    micCall=peer.call(classId,vMic,{metadata:{kind:'mic',name}});
-    micCall.on('close',()=>stopTalk(true));micCall.on('error',()=>stopTalk(true));
+    catch(e){const m=micErr(e);$('#vTalkInfo').textContent='⚠ '+m;toast(m,9000);sendT({t:'micfail',why:String(e&&e.name||e)});return}
+    micHeard=false;placeMicCall();startMeter(vMic);
     if(hand){hand=false;sendT({t:'hand',on:false});updHand()}
     updTalk();
   }
+  function placeMicCall(){
+    if(!vMic)return;
+    try{if(micCall)micCall.close()}catch{}
+    micCall=peer.call(classId,vMic,{metadata:{kind:'mic',name}});
+    const me=micCall;
+    me.on('close',()=>{if(micCall===me)stopTalk(true)});me.on('error',()=>{});
+    clearTimeout(micTimer);
+    micTimer=setTimeout(()=>{if(micCall===me&&!micHeard){
+      if(micRetry<1){micRetry++;$('#vTalkInfo').textContent='⏳ Still connecting your microphone… retrying';placeMicCall()}
+      else{$('#vTalkInfo').textContent='⚠ The teacher is not receiving your microphone. Check your internet, then tap Mute and Unmute again.';toast('Your microphone could not reach the teacher. Try Mute → Unmute again.',7000)}}},9000);
+  }
   function stopTalk(fromClose){
+    clearTimeout(micTimer);micRetry=0;micHeard=false;stopMeter();
     const c=micCall;micCall=null;
     if(c&&!fromClose)try{c.close()}catch{}
     if(vMic){vMic.getTracks().forEach(t=>t.stop());vMic=null}
@@ -1425,6 +1471,8 @@ function viewerMain(classId,iceParam){
     updTalk();
   }
   $('#vTalk').onclick=()=>micCall?stopTalk():startTalk();
+  $('#vAskYes').onclick=()=>{micOk=true;startTalk()};
+  $('#vAskNo').onclick=()=>{$('#vAsk').classList.remove('show');sendT({t:'micdecline'})};
   $('#vShare').onclick=()=>scrCall?stopShare():startShare();
   document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target.tagName!=='INPUT'&&micFree&&!micCall&&gotStream){/* hold Space to talk could go here */}});
   updTalk();
@@ -1472,12 +1520,16 @@ function viewerMain(classId,iceParam){
     if(!name){$('#vName').focus();toast('Please type your name.');return}
     try{localStorage.setItem('litecast-name',name)}catch{}
     $('#vJoin').classList.remove('show');stat('Connecting…');
+    if($('#vMicPerm').checked&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+      try{const t=await navigator.mediaDevices.getUserMedia({audio:true});t.getTracks().forEach(x=>x.stop())}
+      catch(e){toast('Microphone not allowed yet — you can still watch. '+micErr(e),9000)}
+    }
     try{await loadPeerJS()}catch(e){stat(e.message);msg('Could not reach the live server. Check your internet and reload the page.');return}
     const ice=await iceServers(iceParam?b64d(iceParam):null);
     try{peer=await openPeer(null,ice)}catch(e){stat('Connection error');msg('Could not connect ('+(e.type||e.message)+'). Reload the page to try again.');return}
     peer.on('call',call=>{
       call.answer();
-      call.on('stream',st=>{if(vrec&&vid.srcObject!==st){stopVRec();toast('Video reconnected — your recording so far was saved. Press Record to continue.',6000)}gotStream=true;vid.srcObject=st;vid.muted=false;
+      call.on('stream',st=>{setTimeout(updTalk,50);if(vrec&&vid.srcObject!==st){stopVRec();toast('Video reconnected — your recording so far was saved. Press Record to continue.',6000)}gotStream=true;vid.srcObject=st;vid.muted=false;
         vid.play().then(()=>msg('')).catch(()=>msg('',true));stat('● Live',true)});
       call.on('close',()=>{if(!ended){gotStream=false;stat('Video interrupted — reconnecting…')}});
     });
@@ -1503,6 +1555,8 @@ function viewerMain(classId,iceParam){
       else if(d.t==='removed'){ended=true;stopTalk();stopShare();if(vrec)stopVRec();try{vid.srcObject=null}catch{}stat('Removed');msg('You were removed from the class by the teacher.');setTimeout(()=>{try{peer.destroy()}catch{}},500)}
       else if(d.t==='locked'){ended=true;stat('Class locked');msg('The class is locked. Ask your teacher to unlock it, then reload this page.');setTimeout(()=>{try{peer.destroy()}catch{}},500)}
       else if(d.t==='mute'){if(micCall){stopTalk();toast('The teacher muted your microphone.',3000)}}
+      else if(d.t==='micHeard'){micHeard=true;clearTimeout(micTimer);updTalk()}
+      else if(d.t==='askMic'){if(!micCall){$('#vAsk').classList.add('show');try{const a=new AudioContext(),o=a.createOscillator(),g=a.createGain();o.frequency.value=880;g.gain.value=.12;o.connect(g).connect(a.destination);o.start();o.stop(a.currentTime+.25)}catch{}}}
       else if(d.t==='micAllow'){micOk=!!d.on;if(micOk){toast('🎙 The teacher gave you the mic — tap Unmute to speak.',5000)}else if(micCall&&!micFree)stopTalk();updTalk()}
       else if(d.t==='micDenied'){stopTalk(true);toast('Wait for the teacher to give you the mic.',3500)}
       else if(d.t==='stopScreen'){if(scrCall){stopShare();toast('The teacher stopped your screen share.',3000)}}
