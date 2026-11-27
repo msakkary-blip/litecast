@@ -424,7 +424,7 @@ class FrameSrc{
     }
     const v=document.createElement('video');v.muted=true;v.playsInline=true;v.srcObject=new MediaStream([track]);$('#hid').appendChild(v);v.play().catch(()=>{});this.vid=v;
   }
-  async loop(){try{while(this.alive){const{value,done}=await this.reader.read();if(done)break;if(this.frame)this.frame.close();this.frame=value;if(!this.alive){value.close();this.frame=null}}}catch(e){}}
+  async loop(){try{while(this.alive){const{value,done}=await this.reader.read();if(done)break;if(this.idle||!this.alive){value.close();if(this.frame){this.frame.close();this.frame=null}continue}if(this.frame)this.frame.close();this.frame=value}}catch(e){}}
   get w(){return this.frame?this.frame.displayWidth:this.vid?this.vid.videoWidth:0}
   get h(){return this.frame?this.frame.displayHeight:this.vid?this.vid.videoHeight:0}
   get img(){return this.frame||(this.vid&&this.vid.readyState>=2?this.vid:null)}
@@ -480,7 +480,7 @@ if(NATIVE){
 let camStream=null,micStream=null,displayStream=null,camSrc=null,scrSrc=null,audioCtx=null,analyser=null,meterBuf=null,micMuted=false;
 const rec={active:false,paused:false,mr:null,chunks:[],bytes:0,t0:0,acc:0,mime:''};
 const cap={active:false,direct:false,vtrack:null,stream:null,micGain:null,extra:[],W:0,H:0};
-const live={active:false,peer:null,viewers:new Map(),waiting:new Map(),admitted:new Set(),blocked:new Set(),locked:false,att:new Map(),chat:[],t0:0,compact:false};
+const live={active:false,peer:null,viewers:new Map(),waiting:new Map(),admitted:new Set(),blocked:new Set(),locked:false,att:new Map(),chat:[],t0:0,compact:false,view:'cam'};
 const elapsed=()=>rec.active?rec.acc+(rec.paused?0:performance.now()-rec.t0):0;
 let pipWin=null;
 
@@ -541,6 +541,7 @@ function draw(){
 /* ---------------- tick ---------------- */
 let lastUi=0;
 function onTick(){
+  if(camSrc)camSrc.idle=!S.camVisible||(S.mode==='screencam'&&S.camStyle==='bubble'&&cap.active&&!NATIVE);
   if(scrSrc&&scrSrc.poll)scrSrc.poll();
   if(!document.hidden||cap.active) draw();
   if(cap.active&&!cap.direct&&cap.vtrack&&cap.vtrack.requestFrame&&!(rec.active&&rec.paused&&!live.active)) cap.vtrack.requestFrame();
@@ -573,7 +574,9 @@ async function startCamera(){
   stopCamera();
   try{
     camStream=await navigator.mediaDevices.getUserMedia({video:{deviceId:S.camId?{exact:S.camId}:undefined,width:{ideal:640},height:{ideal:480},frameRate:{ideal:24}}});
-    camSrc=new FrameSrc(camStream.getVideoTracks()[0]);
+    const vt=camStream.getVideoTracks()[0];
+    camSrc=new FrameSrc(vt);
+    vt.onended=()=>{if(camStream&&camStream.getVideoTracks()[0]===vt&&needCam()){toast('Camera dropped — reconnecting…',2500);setTimeout(()=>{if(needCam()&&(!camStream||camStream.getVideoTracks()[0]===vt))startCamera()},800)}};
     if(pipWin)buildPip();
   }catch(e){camStream=null;toast('Camera unavailable: '+e.message)}
 }
@@ -869,7 +872,7 @@ body.circle video{inset:5%;width:90%;height:90%;border-radius:50%;border:3px sol
 body.rounded video{border-radius:14px}
 body.mirror video.pcam,body.mirror #pv{transform:scaleX(-1)}
 .bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:5px;align-items:center;justify-content:center;padding:6px;background:linear-gradient(transparent,rgba(0,0,0,.85));transition:opacity .2s}
-body.cam.rec .bar{opacity:0}body:hover .bar{opacity:1!important}
+body.cam.rec .bar,body.cam.live .bar{opacity:0}body:hover .bar{opacity:1!important}
 body.nocam .bar{top:0;background:#161920}
 button{border:0;border-radius:7px;padding:5px 8px;background:#2b3040;color:#fff;cursor:pointer;font-size:12.5px}
 button:hover{background:#3a4156}
@@ -902,25 +905,27 @@ body.compact .pbody{display:none}
 .pchat div{margin-bottom:3px}.pchat b{color:#9fc0ff}.pchat .sys{color:#97a0b1;font-style:italic}
 #pform{display:flex;gap:5px;margin-top:5px}#pform input{flex:1;min-width:0;background:#1d212b;border:1px solid #2a2f3b;border-radius:7px;color:#fff;padding:5px 7px;font:inherit}
 .badge{background:#f5a524;color:#000;border-radius:10px;padding:0 6px;font-size:11px;font-weight:700}`;
-async function openPip(){
+async function openPip(view){
   if(!('documentPictureInPicture' in window)){toast('The floating panel needs Chrome or Edge version 116 or newer.');return}
-  if(pipWin){pipWin.focus();return}
+  if(view)live.view=view;
+  if(pipWin){if(view)setPipView(view);pipWin.focus();return}
   const cam=pipHasCam();
-  pipWin=await documentPictureInPicture.requestWindow(live.active?{width:360,height:620}:(cam?{width:230,height:230}:{width:330,height:56}));
+  pipWin=await documentPictureInPicture.requestWindow(live.active&&(live.view==='panel'||!cam)?{width:360,height:620}:(cam?{width:230,height:230}:{width:330,height:56}));
   pipWin.addEventListener('pagehide',()=>{pipWin=null;updateUi()});
   buildPip();
 }
+function setPipView(v){live.view=v;buildPip();if(!pipWin)return;const panel=live.active&&(v==='panel'||!pipHasCam());try{panel?pipWin.resizeTo(360,live.compact?96:620):pipWin.resizeTo(230,230)}catch(e){}}
 const pipHasCam=()=>S.mode==='screencam'&&S.camStyle==='bubble'&&!NATIVE&&!!camStream;
 const escH=t=>String(t).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 function buildPip(){
   if(!pipWin)return;const d=pipWin.document;const cam=pipHasCam()||(S.mode!=='screen'&&!live.active&&!!camStream&&!NATIVE);
   d.head.innerHTML=`<style>${PIPCSS}</style>`;d.title='LiteCast';
-  if(live.active){
+  if(live.active&&(live.view==='panel'||!pipHasCam())){
     const pcam=pipHasCam();
     d.body.className='panel '+S.shape+(S.mirror?' mirror':'')+(live.compact?' compact':'');
     d.body.innerHTML=`<div class="ph">${pcam?'<video class="pcam" id="pv" autoplay muted playsinline></video>':''}
       <div class="phx"><div class="prow"><span class="dot"></span><span class="t" id="pt">00:00</span><span class="pill" id="plive">● LIVE · <span id="pcount">0</span></span><span id="palert"></span></div>
-      <div class="prow"><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${S.mode!=='screen'?'<button id="pcam">🎥</button>':''}<button id="pcomp" title="Show / hide the class list">${live.compact?'▾':'▴'}</button></div></div></div>
+      <div class="prow"><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${S.mode!=='screen'?'<button id="pcam">🎥</button>':''}<button id="pcomp" title="Show / hide the class list">${live.compact?'▾':'▴'}</button>${pcam?'<button id="ponly" title="Back to camera only">🎥 only</button>':''}</div></div></div>
       <div class="pbody">
         <div class="sec" id="pwaitSec"><div class="sh">🚪 Waiting room<span class="sp"></span><button data-act="admitall">Admit all</button></div><div id="pwait"></div></div>
         <div class="sec"><div class="sh">👥 Students<span class="sp"></span><button data-act="muteall">🔇 all</button></div><div id="pstud"></div></div>
@@ -931,11 +936,12 @@ function buildPip(){
     d.body.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(!b)return;panelAction(b.dataset.act,b.dataset.id)});
     d.getElementById('pform').addEventListener('submit',e=>{e.preventDefault();const i=d.getElementById('pmsg');const t=i.value.trim();if(t){teacherSay(t);i.value=''}});
     const pc=d.getElementById('pchat');(live.chat||[]).slice(-30).forEach(m=>pipChat(m));
-    if(pcam){const v=d.getElementById('pv');v.srcObject=camStream;v.play().catch(()=>{})}
+    if(pcam){const v=d.getElementById('pv');v.srcObject=camStream;v.play().catch(()=>{});d.getElementById('ponly').onclick=()=>setPipView('cam')}
   }else{
-    d.body.className=(cam?'cam ':'nocam ')+S.shape+(S.mirror?' mirror':'');
+    d.body.className=(cam?'cam ':'nocam ')+S.shape+(S.mirror?' mirror':'')+(live.active?' live':'');
     d.body.innerHTML=(cam?'<video id="pv" autoplay muted playsinline></video><div class="off" id="poff">camera hidden</div>':'')+
-     `<div class="bar"><span class="dot"></span><span class="t" id="pt">00:00</span><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${cam?'<button id="pcam">🎥</button>':''}</div><div id="pcd"></div>`;
+     `<div class="bar"><span class="dot"></span><span class="t" id="pt">00:00</span><button id="prec" class="r">● Rec</button><button id="ppause">⏸</button><button id="pmic">🎙</button>${cam?'<button id="pcam">🎥</button>':''}${live.active?'<button id="ppeople" title="Open the class panel (students, chat, waiting room)">👥 <span id="pppl"></span></button>':''}</div><div id="pcd"></div>`;
+    if(live.active)d.getElementById('ppeople').onclick=()=>setPipView('panel');
     if(cam){const v=d.getElementById('pv');v.srcObject=camStream;v.play().catch(()=>{})}
   }
   d.getElementById('prec').onclick=()=>rec.active?stopRec(true):startRec();
@@ -962,7 +968,8 @@ function waitingRows(){
   return w.length?w.map(x=>`<div class="it wait"><span class="nm">🚪 ${escH(x.name)}</span><button class="g" data-act="admit" data-id="${x.id}">Admit</button><button data-act="deny" data-id="${x.id}">Decline</button></div>`).join(''):'<div class="empty">Nobody is waiting</div>';
 }
 function renderPip(){
-  if(!pipWin||!live.active)return;const d=pipWin.document;if(!d.body.classList.contains('panel'))return;
+  if(!pipWin||!live.active)return;const d=pipWin.document;
+  if(!d.body.classList.contains('panel')){const e=d.getElementById('pppl');if(e){const h=[...live.viewers.values()].filter(v=>v.hand).length,w=live.waiting.size;e.textContent=live.viewers.size+(w?' 🚪'+w:'')+(h?' ✋'+h:'')}return}
   const q=id=>d.getElementById(id);
   if(q('pwait'))q('pwait').innerHTML=waitingRows();
   if(q('pwaitSec'))q('pwaitSec').style.display=(S.admitManual||live.waiting.size)?'':'none';
@@ -1002,7 +1009,7 @@ function updateUi(){
     const q=id=>d.getElementById(id);if(q('pt'))q('pt').textContent=t;if(q('prec'))q('prec').textContent=rec.active?'■ Stop':'● Rec';
     if(q('ppause'))q('ppause').textContent=rec.paused?'▶':'⏸';if(q('pmic'))q('pmic').textContent=micMuted?'🔇':'🎙';
     if(q('pcam'))q('pcam').textContent=S.camVisible?'🎥':'🚫';if(q('plive'))q('plive').classList.toggle('off2',!live.active);
-    if(q('pv'))q('pv').style.visibility=S.camVisible?'visible':'hidden';if(q('poff'))q('poff').style.display=S.camVisible?'none':'flex'}
+    if(q('pv')){const pv=q('pv');pv.style.visibility=S.camVisible?'visible':'hidden';if(camStream&&pv.srcObject!==camStream)pv.srcObject=camStream;if(S.camVisible&&pv.paused&&pv.srcObject)pv.play().catch(()=>{})}if(q('poff'))q('poff').style.display=S.camVisible?'none':'flex'}
 }
 const mbPerMin=()=>(S.vk+(S.micOn||S.sysAudio?S.ak:0))*1000/8*60/1048576;
 function renderSettings(){
@@ -1078,7 +1085,7 @@ stage.addEventListener('wheel',e=>{if(S.mode!=='screencam')return;e.preventDefau
 $('#recBtn').onclick=()=>rec.active?stopRec(true):startRec();
 $('#pauseBtn').onclick=togglePause;
 $('#camToggle').onclick=toggleCam;$('#micToggle').onclick=toggleMic;
-$('#pipBtn').onclick=()=>pipWin?pipWin.close():openPip().catch(e=>toast(e.message));
+$('#pipBtn').onclick=()=>pipWin?pipWin.close():openPip('cam').catch(e=>toast(e.message));
 $('#enableBtn').onclick=async()=>{ensureAudio();
   try{const s=await navigator.mediaDevices.getUserMedia({video:needCam(),audio:S.micOn});s.getTracks().forEach(t=>t.stop())}catch(e){toast('Permission was not granted: '+e.message)}
   await syncDevices()};
@@ -1168,7 +1175,7 @@ async function goLive(){
     $('#tChat').innerHTML='';live.chat=[];sysChat('Class started. Share the link with your students.');
     renderLive();updateUi();
     if(pipWin)buildPip();
-    toast('📡 You are live! Send the link, then click <b>⧉ Floating class panel</b> to keep the class controls on top of PowerPoint and other apps.',8000);
+    toast(pipHasCam()?'📡 You are live! Your camera floats on top of every app — share your <b>Entire screen</b> so students see it. Hover the bubble and click 👥 for students & chat.':'📡 You are live! Send the link, then click <b>⧉ Floating class panel</b> to keep the class controls on top of PowerPoint and other apps.',8000);
   }finally{live.starting=false;$('#liveBtn').disabled=false;updateUi()}
 }
 function endLive(){
@@ -1250,7 +1257,7 @@ function exportAttendance(){
 }
 $('#attBtn').onclick=exportAttendance;
 $('#lockBtn').onclick=()=>{live.locked=!live.locked;renderLive();toast(live.locked?'🔒 Class locked — nobody new can join':'🔓 Class open again',2500)};
-$('#panelBtn').onclick=()=>openPip().catch(e=>toast(e.message));
+$('#panelBtn').onclick=()=>openPip('panel').catch(e=>toast(e.message));
 $('#waitBox').addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)panelAction(b.dataset.act,b.dataset.id)});
 function callViewer(v){
   if(!live.active||!cap.stream) return;
